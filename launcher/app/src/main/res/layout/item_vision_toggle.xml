@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One round toggle on the visionOS panel: the circle, then its name and an optional second line under it. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="0dp"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:gravity="center_horizontal"
+    android:paddingTop="6dp"
+    android:paddingBottom="6dp"
+    android:focusable="true"
+    android:clickable="true">
+
+    <ImageView
+        android:id="@+id/icon"
+        android:layout_width="54dp"
+        android:layout_height="54dp"
+        android:padding="16dp"
+        android:background="@drawable/vision_toggle_bg"
+        android:tint="@drawable/pill_text"
+        android:duplicateParentState="true"
+        android:contentDescription="@null" />
+
+    <!-- Long names ("Accessibility", a Wi-Fi network's name) shrink to fit the column instead of being cut off. -->
+    <TextView
+        android:id="@+id/title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="7dp"
+        android:paddingStart="2dp"
+        android:paddingEnd="2dp"
+        android:gravity="center"
+        android:textColor="@color/text_primary"
+        android:textSize="12sp"
+        android:fontFamily="@string/font_medium"
+        android:maxLines="1"
+        android:autoSizeTextType="uniform"
+        android:autoSizeMinTextSize="9sp"
+        android:autoSizeMaxTextSize="12sp"
+        android:autoSizeStepGranularity="0.5sp" />
+
+    <TextView
+        android:id="@+id/status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="2dp"
+        android:paddingEnd="2dp"
+        android:gravity="center"
+        android:textColor="@color/text_secondary"
+        android:textSize="10sp"
+        android:fontFamily="@string/font_body"
+        android:maxLines="1"
+        android:autoSizeTextType="uniform"
+        android:autoSizeMinTextSize="8sp"
+        android:autoSizeMaxTextSize="10sp"
+        android:autoSizeStepGranularity="0.5sp"
+        android:visibility="gone" />
+</LinearLayout>

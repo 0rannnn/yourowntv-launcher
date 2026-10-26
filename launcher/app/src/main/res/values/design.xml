@@ -24,6 +24,14 @@
     <color name="scrim_edge">#99000000</color>
     <color name="scrim_far">#00000000</color>
 
+    <!-- visionOS panel (theme vision_panel): light frosted cards floating over a dim, toggles that turn blue. -->
+    <color name="vision_top">#F04E4E58</color>
+    <color name="vision_bottom">#F23A3A43</color>
+    <color name="vision_edge">#4DFFFFFF</color>
+    <color name="vision_control">#2EFFFFFF</color>
+    <color name="vision_on">#FF0A84FF</color>
+    <color name="vision_scrim">#A6000000</color>
+
     <dimen name="radius_panel">30dp</dimen>
     <dimen name="radius_control">20dp</dimen>
     <dimen name="radius_pill">21dp</dimen>

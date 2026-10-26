@@ -33,6 +33,12 @@ import java.util.concurrent.Executors;
 final class WallpaperPlayer {
     private final FrameLayout root;
     private final ImageView image;
+    /**
+     * The shown picture's foreground cut-out (NN-name.fg.png beside it), drawn over the centred clock so the clock
+     * stands behind the landscape. Root child 1: HeaderExtras puts the clock under it. Empty for a picture without one.
+     */
+    private final ImageView foreground;
+    private Bitmap currentForeground;
     private final int backgroundColor;
     private final List<File> files;
     private final long interval;
@@ -91,8 +97,17 @@ final class WallpaperPlayer {
         names = config.wallpaperCaptions && config.wallpaperEnabled && !files.isEmpty()
                 ? WallpaperCaptions.read(files.get(0).getParentFile()) : Collections.emptyMap();
         caption = names.isEmpty() ? null : makeCaption(context, root);
+        foreground = new ImageView(context);
+        foreground.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        foreground.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        foreground.setTag(FOREGROUND_TAG);
+        // The wallpaper's dim is painted into the picture; the cut-out gets the same through a filter, so the two
+        // stay pixel for pixel alike where they overlap.
+        if (dimColor != 0) foreground.setColorFilter(dimColor, android.graphics.PorterDuff.Mode.SRC_ATOP);
         if (config.wallpaperEnabled && !files.isEmpty()) {
             root.addView(image, 0, new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            root.addView(foreground, 1, new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
             showFirst();
         }
@@ -112,6 +127,7 @@ final class WallpaperPlayer {
             Bitmap bitmap = decode(first);
             if (bitmap != null) {
                 show(bitmap);
+                showForeground(decodeForeground(first));
                 // The picture covers the whole screen: the root's plain colour under it is overdraw.
                 root.setBackground(null);
                 displayed = first.getName();
@@ -141,6 +157,8 @@ final class WallpaperPlayer {
     void releaseForMemoryPressure() {
         if (current == null) return;
         image.setImageDrawable(null);
+        foreground.setImageDrawable(null);
+        currentForeground = null;
         // The renderer may still have a queued frame that references this hardware bitmap. Drop our references and
         // let Android reclaim its native buffer after rendering releases it instead of recycling it mid-frame.
         current = null;
@@ -180,10 +198,12 @@ final class WallpaperPlayer {
         loading = true;
         decoder.execute(() -> {
             Bitmap bitmap = decode(next);
+            Bitmap cutOut = bitmap == null ? null : decodeForeground(next);
             root.post(() -> {
                 loading = false;
                 if (closed || !active) {
                     if (bitmap != null) bitmap.recycle();
+                    if (cutOut != null) cutOut.recycle();
                     return;
                 }
                 if (bitmap == null) {
@@ -193,6 +213,7 @@ final class WallpaperPlayer {
                     return;
                 }
                 show(bitmap);
+                showForeground(cutOut);
                 displayed = next.getName();
                 showCaption(true);
                 if (!displayed.equals(previous) || changed == 0) {
@@ -267,6 +288,56 @@ final class WallpaperPlayer {
         root.setBackground(null);
         image.setImageBitmap(bitmap);
         if (old != null && old != bitmap) image.postDelayed(old::recycle, 500);
+    }
+
+    /** Tag of the cut-out view in the root, for HeaderExtras to slide the centred clock under it. */
+    static final String FOREGROUND_TAG = "wallpaper_foreground";
+
+    /** The quick panel's clock-depth switch: with it off the clock stands in front of the whole picture. */
+    void showCutOut(boolean shown) {
+        foreground.setVisibility(shown ? View.VISIBLE : View.GONE);
+    }
+
+    /** Puts a picture's cut-out on screen, or clears it for a picture without one. */
+    private void showForeground(Bitmap bitmap) {
+        Bitmap old = currentForeground;
+        currentForeground = bitmap;
+        foreground.setImageBitmap(bitmap);
+        if (old != null && old != bitmap) foreground.postDelayed(old::recycle, 500);
+    }
+
+    /**
+     * The cut-out beside a picture, scaled exactly as the picture is so the two line up, with its transparency
+     * kept; null when the picture has none or it cannot be read.
+     */
+    private Bitmap decodeForeground(File wallpaper) {
+        File file = WallpaperRotation.foregroundOf(wallpaper);
+        if (!file.isFile()) return null;
+        try {
+            BitmapFactory.Options options = new BitmapFactory.Options();
+            options.inJustDecodeBounds = true;
+            BitmapFactory.decodeFile(file.getPath(), options);
+            int width = options.outWidth, height = options.outHeight;
+            if (width <= 0 || height <= 0) return null;
+            int sample = WallpaperSize.sampleSize(width, height, this.width, this.height);
+            options.inJustDecodeBounds = false;
+            options.inSampleSize = sample;
+            int[] scale = WallpaperSize.coverScale(width / sample, height / sample, this.width, this.height);
+            if (scale != null) {
+                options.inScaled = true;
+                options.inDensity = scale[0];
+                options.inTargetDensity = scale[1];
+            }
+            options.inPreferredConfig = Bitmap.Config.ARGB_8888;
+            Bitmap decoded = BitmapFactory.decodeFile(file.getPath(), options);
+            if (decoded == null) return null;
+            Bitmap gpu = decoded.copy(Bitmap.Config.HARDWARE, false);
+            if (gpu == null) return decoded;
+            decoded.recycle();
+            return gpu;
+        } catch (Exception | OutOfMemoryError failure) {
+            return null;
+        }
     }
 
     private Bitmap decode(File file) {

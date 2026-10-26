@@ -25,7 +25,12 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
+import android.graphics.Bitmap;
+import android.graphics.Outline;
 import android.graphics.drawable.GradientDrawable;
+import android.os.SystemClock;
+import android.view.ViewOutlineProvider;
+import android.widget.ProgressBar;
 import android.view.Gravity;
 import android.view.ViewGroup;
 import android.view.animation.AccelerateInterpolator;
@@ -39,6 +44,7 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -50,6 +56,10 @@ import java.util.Set;
  * a tall glass panel at the right edge, after Google TV's own, with the date and clock, a gear for the full
  * TV settings and a two-column grid of tiles. Translucent and in a task of its own, so the app behind keeps
  * running and Back returns to it. Pressing Settings again closes the panel.
+ * <p>
+ * With the theme's {@code vision_panel} the same controls come as visionOS does them instead: three light glass cards
+ * in the middle of the screen (activity_quick_vision.xml), the clock with what is playing, round toggles that are blue
+ * while on, and the paired devices.
  */
 public final class QuickSettingsActivity extends Activity {
     private static final String TV_SETTINGS = "com.android.tv.settings";
@@ -72,6 +82,14 @@ public final class QuickSettingsActivity extends Activity {
     /** Back was pressed and the exit animation is running. */
     private boolean closing;
 
+    /** vision_panel: the centred visionOS cards instead of the right-edge panel. */
+    private boolean vision;
+    /** Spotify's session the now-playing card follows, and the tick that moves its progress bar. */
+    private MediaController following;
+    private MediaController.Callback followCallback;
+    private final Handler ticker = new Handler(Looper.getMainLooper());
+    private Runnable tick;
+
     private BluetoothAdapter adapter;
     private final Map<Integer, BluetoothProfile> proxies = new HashMap<>();
     private final Map<String, View> deviceRows = new HashMap<>();
@@ -85,8 +103,10 @@ public final class QuickSettingsActivity extends Activity {
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
-        setContentView(R.layout.activity_quick_settings);
-        if (getResources().getBoolean(R.bool.rtl_menu_bar)) {
+        vision = HeaderExtras.themeFlag(this, "vision_panel");
+        setContentView(vision ? R.layout.activity_quick_vision : R.layout.activity_quick_settings);
+        if (vision) findViewById(R.id.qsClose).setOnClickListener(v -> onBackPressed());
+        if (!vision && getResources().getBoolean(R.bool.rtl_menu_bar)) {
             View panel = findViewById(R.id.panel);
             FrameLayout.LayoutParams position = (FrameLayout.LayoutParams) panel.getLayoutParams();
             position.gravity = Gravity.LEFT;
@@ -104,12 +124,21 @@ public final class QuickSettingsActivity extends Activity {
         gear.setOnClickListener(v -> open(listOf(SystemSettings.intent(this, Settings.ACTION_SETTINGS))));
 
         GridLayout tiles = findViewById(R.id.tiles);
+        // The top-right buttons' Inputs and Reorder, through Home: it owns the inputs list and the tiles. Wi-Fi,
+        // Bluetooth and the TV settings gear are here already.
+        if (vision) {
+            addTile(tiles, R.drawable.ic_input, getString(R.string.inputs), null,
+                    listOf(new Intent(this, MainActivity.class).setAction(MainActivity.ACTION_VIEW_INPUTS)));
+        }
         addTile(tiles, R.drawable.ic_screensaver, getString(R.string.qs_screensaver), null,
                 listOf(new Intent(this, ClockActivity.class)));
         String[] network = network();
-        addTile(tiles, network[0].equals(getString(R.string.ethernet)) ? R.drawable.ic_ethernet : R.drawable.ic_wifi,
+        View networkTile = addTile(tiles, network[0].equals(getString(R.string.ethernet)) ? R.drawable.ic_ethernet : R.drawable.ic_wifi,
                 network[0], network[1], listOf(SystemSettings.intent(this, Settings.ACTION_WIFI_SETTINGS)));
-        addTile(tiles, R.drawable.ic_bluetooth, getString(R.string.qs_bluetooth), null, bluetoothTargets(this));
+        // On a visionOS toggle, blue means on: online, and Bluetooth switched on.
+        networkTile.setActivated(!network[0].equals(getString(R.string.quick_network)));
+        View bluetoothTile = addTile(tiles, R.drawable.ic_bluetooth, getString(R.string.qs_bluetooth), null, bluetoothTargets(this));
+        bluetoothTile.setActivated(bluetoothOn());
         addTile(tiles, R.drawable.ic_volume, getString(R.string.qs_sound), null, listOf(
                 new Intent("com.android.tv.action.VIEW_SOUND_SETTINGS").setPackage(TV_SETTINGS),
                 new Intent(Settings.ACTION_SOUND_SETTINGS).setPackage(TV_SETTINGS),
@@ -128,6 +157,20 @@ public final class QuickSettingsActivity extends Activity {
         // Through Home, so it rebuilds with the new choices when Launcher settings closes.
         addTile(tiles, R.drawable.ic_home_settings, getString(R.string.qs_launcher), null,
                 listOf(new Intent(this, MainActivity.class).setAction(MainActivity.ACTION_LAUNCHER_SETTINGS)));
+        if (vision) {
+            addTile(tiles, R.drawable.ic_swap_vert, getString(R.string.qs_reorder), null,
+                    listOf(new Intent(this, MainActivity.class).setAction(MainActivity.ACTION_REORDER)));
+        }
+        // Home's own switches: the clock behind the landscape or in front of it, and the navigation sound.
+        if (HeaderExtras.themeFlag(this, "center_clock")) {
+            addSwitch(tiles, R.drawable.ic_depth, R.drawable.ic_depth, R.string.qs_clock_depth,
+                    HomeToggles.clockBehind(this), on -> HomeToggles.setClockBehind(this, on));
+        }
+        File dir = Config.dir(this);
+        if (dir != null && new File(dir, NavSound.FILE).isFile()) {
+            addSwitch(tiles, R.drawable.ic_nav_sound, R.drawable.ic_nav_sound_off, R.string.qs_nav_sound,
+                    !HomeToggles.navMuted(this), on -> HomeToggles.setNavMuted(this, !on));
+        }
         addSpotify(tiles);
         addPairedDevices(tiles);
 
@@ -145,17 +188,148 @@ public final class QuickSettingsActivity extends Activity {
         });
 
         // Up from the top row reaches the gear, Down from the gear and the language button the first tile.
-        for (int i = 0; i < 2 && i < tiles.getChildCount(); i++) tiles.getChildAt(i).setNextFocusUpId(R.id.qsGear);
+        for (int i = 0; i < tiles.getColumnCount() && i < tiles.getChildCount(); i++) {
+            tiles.getChildAt(i).setNextFocusUpId(R.id.qsGear);
+        }
         gear.setNextFocusDownId(tiles.getChildAt(0).getId());
         language.setNextFocusDownId(tiles.getChildAt(0).getId());
+        if (vision) addGlassSlider();
+        // Mirroring takes the views out and puts them back, which drops the focus: mirror first, then focus.
+        if (vision && HebrewFont.hebrew(this)) mirrorForHebrew();
+        addFocusMotion(findViewById(R.id.panel));
+        HebrewFont.apply(findViewById(R.id.scrim));
         if (focusLanguage) {
             focusLanguage = false;
             language.requestFocus();
         } else {
             tiles.getChildAt(0).requestFocus();
         }
-        addFocusMotion(findViewById(R.id.panel));
         if (entering) animatePanel(true, null);
+    }
+
+    /**
+     * The glass slider under the toggles: Left and Right make the cards here, and Home's clock and cards, more or less
+     * see-through. The cards follow at once; Home picks it up when it is back in front.
+     */
+    private void addGlassSlider() {
+        android.widget.SeekBar slider = findViewById(R.id.visionGlass);
+        slider.setKeyProgressIncrement(10);
+        TextView value = findViewById(R.id.visionGlassValue);
+        slider.setProgress(HomeToggles.glass(this));
+        applyCardGlass(slider.getProgress());
+        value.setText(slider.getProgress() + "%");
+        slider.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(android.widget.SeekBar bar, int level, boolean fromUser) {
+                HomeToggles.setGlass(QuickSettingsActivity.this, level);
+                applyCardGlass(level);
+                value.setText(level + "%");
+            }
+
+            @Override
+            public void onStartTrackingTouch(android.widget.SeekBar bar) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(android.widget.SeekBar bar) {
+            }
+        });
+    }
+
+    private void applyCardGlass(int level) {
+        int alpha = HomeToggles.surfaceAlpha(level);
+        View[] cards = {findViewById(R.id.visionNow), findViewById(R.id.visionDevices),
+                (View) findViewById(R.id.tiles).getParent()};
+        for (View card : cards) {
+            if (card == null) continue;
+            // A fresh drawable each time: the alpha of the inflated layer-list's shared state did not reach the screen.
+            android.graphics.drawable.Drawable glass = getDrawable(R.drawable.vision_card);
+            if (glass == null) continue;
+            glass = glass.mutate();
+            glass.setAlpha(alpha);
+            card.setBackground(glass);
+        }
+    }
+
+    /**
+     * A switch tile: OK flips it and it stays open, blue while on, with On or Off under its name. The icon may change
+     * with it (the sound's speaker is struck through while muted).
+     */
+    private void addSwitch(GridLayout tiles, int iconOn, int iconOff, int title, boolean on,
+                           java.util.function.Consumer<Boolean> store) {
+        View tile = addTile(tiles, on ? iconOn : iconOff, getString(title), getString(on ? R.string.qs_on : R.string.qs_off), null);
+        tile.setActivated(on);
+        tile.setOnClickListener(v -> {
+            boolean now = !v.isActivated();
+            store.accept(now);
+            v.setActivated(now);
+            ((ImageView) v.findViewById(R.id.icon)).setImageResource(now ? iconOn : iconOff);
+            TextView status = v.findViewById(R.id.status);
+            status.setText(now ? R.string.qs_on : R.string.qs_off);
+            status.setVisibility(View.VISIBLE);
+        });
+    }
+
+    /**
+     * The vision panel in Hebrew: read from the right, so the cards, the header row and every row's icon and text run
+     * the other way, and texts sit at the right. The launcher lays out left to right (no supportsRtl), so the order is
+     * turned around by hand; the toggle grid is placed right to left as it is filled (addVisionTile).
+     */
+    private void mirrorForHebrew() {
+        reverseChildren(findViewById(R.id.panel));
+        reverseChildren((ViewGroup) findViewById(R.id.qsGear).getParent());
+        reverseChildren(findViewById(R.id.visionGlassRow));
+        LinearLayout now = findViewById(R.id.visionNow);
+        now.setGravity(Gravity.RIGHT);
+        mirrorRows(findViewById(R.id.visionMedia));
+        mirrorRows(findViewById(R.id.visionDevicesList));
+        View devices = findViewById(R.id.visionDevices);
+        if (devices instanceof LinearLayout) ((LinearLayout) devices).setGravity(Gravity.RIGHT);
+    }
+
+    /** Each horizontal row with an icon and lines of text: icon to the right, text right-aligned. */
+    private static void mirrorRows(ViewGroup list) {
+        if (list == null) return;
+        for (int i = 0; i < list.getChildCount(); i++) {
+            View child = list.getChildAt(i);
+            if (!(child instanceof LinearLayout)) continue;
+            LinearLayout row = (LinearLayout) child;
+            if (row.getOrientation() != LinearLayout.HORIZONTAL || row.getChildCount() < 2) continue;
+            // Icon then text only: the media buttons keep their order, as they do in every language.
+            if (!(row.getChildAt(0) instanceof ImageView)
+                    || !(row.getChildAt(row.getChildCount() - 1) instanceof LinearLayout)) continue;
+            reverseChildren(row);
+            for (int k = 0; k < row.getChildCount(); k++) {
+                View part = row.getChildAt(k);
+                ViewGroup.LayoutParams lp = part.getLayoutParams();
+                if (lp instanceof ViewGroup.MarginLayoutParams) {
+                    ViewGroup.MarginLayoutParams m = (ViewGroup.MarginLayoutParams) lp;
+                    int start = m.getMarginStart();
+                    m.setMarginStart(m.getMarginEnd());
+                    m.setMarginEnd(start);
+                    m.leftMargin = m.getMarginStart();
+                    m.rightMargin = m.getMarginEnd();
+                }
+                if (part instanceof LinearLayout) {
+                    LinearLayout lines = (LinearLayout) part;
+                    lines.setGravity(Gravity.RIGHT);
+                    for (int t = 0; t < lines.getChildCount(); t++) {
+                        if (lines.getChildAt(t) instanceof TextView) {
+                            ((TextView) lines.getChildAt(t)).setGravity(Gravity.RIGHT);
+                        }
+                    }
+                }
+            }
+            row.setPadding(row.getPaddingRight(), row.getPaddingTop(), row.getPaddingLeft(), row.getPaddingBottom());
+        }
+    }
+
+    private static void reverseChildren(ViewGroup group) {
+        if (group == null) return;
+        List<View> children = new ArrayList<>();
+        for (int i = group.getChildCount() - 1; i >= 0; i--) children.add(group.getChildAt(i));
+        group.removeAllViews();
+        for (View child : children) group.addView(child);
     }
 
     /** Back: the panel slides out the way it came in, then closes. */
@@ -173,6 +347,22 @@ public final class QuickSettingsActivity extends Activity {
     private void animatePanel(boolean in, Runnable done) {
         View panel = findViewById(R.id.panel);
         View scrim = findViewById(R.id.scrim);
+        if (vision) {
+            // The cards rise out of the dim, a little smaller at first, as visionOS windows open.
+            int duration = getResources().getInteger(R.integer.motion_panel_ms);
+            if (in) {
+                panel.setAlpha(0f);
+                panel.setScaleX(0.94f);
+                panel.setScaleY(0.94f);
+                scrim.setAlpha(0f);
+            }
+            scrim.animate().alpha(in ? 1f : 0f).setDuration(duration).start();
+            panel.animate().alpha(in ? 1f : 0f).scaleX(in ? 1f : 0.96f).scaleY(in ? 1f : 0.96f)
+                    .setDuration(in ? duration : duration * 2 / 3)
+                    .setInterpolator(in ? new DecelerateInterpolator(2.2f) : new AccelerateInterpolator(1.6f))
+                    .withEndAction(done).start();
+            return;
+        }
         float offset = dp(40) * (getResources().getBoolean(R.bool.rtl_menu_bar) ? -1 : 1);
         int duration = getResources().getInteger(R.integer.motion_panel_ms);
         if (in) {
@@ -211,6 +401,8 @@ public final class QuickSettingsActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        ticker.removeCallbacksAndMessages(null);
+        if (following != null && followCallback != null) following.unregisterCallback(followCallback);
         for (int profile : PROFILES) {
             BluetoothProfile proxy = proxies.get(profile);
             if (proxy != null && adapter != null) adapter.closeProfileProxy(profile, proxy);
@@ -230,6 +422,10 @@ public final class QuickSettingsActivity extends Activity {
         Intent launch = getPackageManager().getLeanbackLaunchIntentForPackage(SPOTIFY);
         if (launch == null) launch = getPackageManager().getLaunchIntentForPackage(SPOTIFY);
         if (launch == null) return;   // not installed, or disabled
+        if (vision) {
+            addNowPlaying(launch);
+            return;
+        }
         addSection(tiles, "Spotify");
         MediaController spotify = spotifySession();
         String line = null;
@@ -273,6 +469,14 @@ public final class QuickSettingsActivity extends Activity {
         button.setContentDescription(getString(description));
         LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) button.getLayoutParams();
         if (row.getChildCount() > 0) lp.setMarginStart(dp(10));
+        if (vision) {
+            // Round, as visionOS media buttons are, centred under the track.
+            button.setBackgroundResource(R.drawable.vision_toggle_bg);
+            lp.width = dp(52);
+            lp.height = dp(52);
+            lp.weight = 0;
+            if (row.getChildCount() > 0) lp.setMarginStart(dp(18));
+        }
         button.setOnClickListener(v -> {
             MediaController session = spotifySession();
             if (session == null) {
@@ -358,7 +562,161 @@ public final class QuickSettingsActivity extends Activity {
         return null;
     }
 
+    /**
+     * The now-playing part of the vision panel's first card: the album art, track and artist (OK resumes, as the
+     * Resume tile does), a progress bar and round previous / play-pause / next. It follows Spotify's session while
+     * the panel is open, so a skip shows the new track.
+     */
+    private void addNowPlaying(Intent open) {
+        LinearLayout media = findViewById(R.id.visionMedia);
+        LinearLayout track = new LinearLayout(this);
+        track.setOrientation(LinearLayout.HORIZONTAL);
+        track.setGravity(Gravity.CENTER_VERTICAL);
+        track.setBackgroundResource(R.drawable.vision_row_bg);
+        track.setPadding(dp(6), dp(6), dp(10), dp(6));
+        track.setFocusable(true);
+        track.setClickable(true);
+        track.setId(View.generateViewId());
+        ImageView art = new ImageView(this);
+        art.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        art.setOutlineProvider(new ViewOutlineProvider() {
+            @Override
+            public void getOutline(View view, Outline outline) {
+                outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), dp(12));
+            }
+        });
+        art.setClipToOutline(true);
+        track.addView(art, new LinearLayout.LayoutParams(dp(60), dp(60)));
+        LinearLayout lines = new LinearLayout(this);
+        lines.setOrientation(LinearLayout.VERTICAL);
+        lines.setDuplicateParentStateEnabled(true);
+        TextView title = mediaText(15, R.drawable.pill_text, R.font.outfit_medium);
+        TextView artist = mediaText(12, R.drawable.pill_text_dim, R.font.outfit_regular);
+        lines.addView(title);
+        lines.addView(artist);
+        LinearLayout.LayoutParams linesLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        linesLp.setMarginStart(dp(12));
+        track.addView(lines, linesLp);
+        track.setOnClickListener(v -> {
+            MediaController session = spotifySession(this);
+            if (session != null) {
+                session.getTransportControls().play();
+            } else {
+                startFirst(this, listOf(open));
+                playWhenReady(getApplicationContext(), 0);
+            }
+            finish();
+        });
+        media.addView(track, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        ProgressBar progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        progress.setMax(1000);
+        progress.setProgressTintList(android.content.res.ColorStateList.valueOf(getColor(R.color.text_primary)));
+        progress.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(0x4DFFFFFF));
+        LinearLayout.LayoutParams progressLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(4));
+        progressLp.topMargin = dp(14);
+        progressLp.leftMargin = progressLp.rightMargin = dp(6);
+        media.addView(progress, progressLp);
+
+        LinearLayout controls = new LinearLayout(this);
+        controls.setOrientation(LinearLayout.HORIZONTAL);
+        controls.setGravity(Gravity.CENTER);
+        addControl(controls, R.drawable.ic_skip_previous, R.string.qs_previous, KeyEvent.KEYCODE_MEDIA_PREVIOUS);
+        addControl(controls, R.drawable.ic_play_pause, R.string.qs_play_pause, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE);
+        addControl(controls, R.drawable.ic_skip_next, R.string.qs_next, KeyEvent.KEYCODE_MEDIA_NEXT);
+        LinearLayout.LayoutParams controlsLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        controlsLp.topMargin = dp(14);
+        media.addView(controls, controlsLp);
+
+        following = spotifySession();
+        Runnable show = () -> showTrack(following, art, title, artist, progress);
+        show.run();
+        if (following != null) {
+            followCallback = new MediaController.Callback() {
+                @Override
+                public void onMetadataChanged(MediaMetadata metadata) {
+                    show.run();
+                }
+
+                @Override
+                public void onPlaybackStateChanged(PlaybackState state) {
+                    show.run();
+                }
+            };
+            following.registerCallback(followCallback, ticker);
+            tick = () -> {
+                showProgress(following, progress);
+                ticker.postDelayed(tick, 1000);
+            };
+            ticker.postDelayed(tick, 1000);
+        }
+    }
+
+    private TextView mediaText(int sp, int colors, int font) {
+        TextView text = new TextView(this);
+        text.setTextSize(sp);
+        text.setTextColor(getColorStateList(colors));
+        text.setTypeface(getResources().getFont(font));
+        text.setSingleLine(true);
+        text.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        text.setDuplicateParentStateEnabled(true);
+        return text;
+    }
+
+    private void showTrack(MediaController session, ImageView art, TextView title, TextView artist, ProgressBar progress) {
+        MediaMetadata meta = session != null ? session.getMetadata() : null;
+        CharSequence name = meta != null ? meta.getText(MediaMetadata.METADATA_KEY_TITLE) : null;
+        CharSequence by = meta != null ? meta.getText(MediaMetadata.METADATA_KEY_ARTIST) : null;
+        Bitmap cover = null;
+        if (meta != null) {
+            cover = meta.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART);
+            if (cover == null) cover = meta.getBitmap(MediaMetadata.METADATA_KEY_ART);
+            if (cover == null) cover = meta.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON);
+        }
+        if (cover != null) {
+            art.setImageBitmap(cover);
+            art.setPadding(0, 0, 0, 0);
+            art.setBackground(null);
+        } else {
+            art.setImageResource(R.drawable.ic_music);
+            art.setPadding(dp(16), dp(16), dp(16), dp(16));
+            art.setBackgroundColor(getColor(R.color.vision_control));
+        }
+        title.setText(name != null ? name : getString(session != null ? R.string.qs_not_playing : R.string.qs_resume));
+        artist.setText(by != null ? by : "Spotify");
+        showProgress(session, progress);
+    }
+
+    /** Where the track is, worked out from the last position Spotify reported and the time since. */
+    private static void showProgress(MediaController session, ProgressBar progress) {
+        PlaybackState state = session != null ? session.getPlaybackState() : null;
+        MediaMetadata meta = session != null ? session.getMetadata() : null;
+        long duration = meta != null ? meta.getLong(MediaMetadata.METADATA_KEY_DURATION) : 0;
+        if (state == null || duration <= 0) {
+            progress.setProgress(0);
+            return;
+        }
+        long position = state.getPosition();
+        if (state.getState() == PlaybackState.STATE_PLAYING) {
+            position += (long) ((SystemClock.elapsedRealtime() - state.getLastPositionUpdateTime())
+                    * state.getPlaybackSpeed());
+        }
+        progress.setProgress((int) Math.max(0, Math.min(1000, position * 1000 / duration)));
+    }
+
     // ---- paired Bluetooth devices ----------------------------------------------------------------------
+
+    /** Bluetooth is switched on; false when it is off or cannot be read. */
+    private boolean bluetoothOn() {
+        try {
+            BluetoothManager manager = getSystemService(BluetoothManager.class);
+            return manager != null && manager.getAdapter() != null && manager.getAdapter().isEnabled();
+        } catch (RuntimeException e) {
+            return false;
+        }
+    }
 
     /**
      * One row per paired device with whether it is connected. A row opens that device's page in TV Settings,
@@ -427,10 +785,16 @@ public final class QuickSettingsActivity extends Activity {
         if (row != null) runOnUiThread(() -> {
             ((TextView) row.findViewById(R.id.status)).setText(R.string.qs_connected);
             row.findViewById(R.id.icon).setAlpha(1f);
+            row.findViewById(R.id.icon).setActivated(vision);
         });
     }
 
     private void addSection(GridLayout tiles, String title) {
+        if (vision) {
+            // The devices card has its own heading.
+            findViewById(R.id.visionDevices).setVisibility(View.VISIBLE);
+            return;
+        }
         TextView label = new TextView(this);
         label.setText(title);
         label.setTextColor(getColor(R.color.text_tertiary));
@@ -506,6 +870,7 @@ public final class QuickSettingsActivity extends Activity {
 
     /** A tile one or two columns wide; without targets the caller sets the click itself. */
     private View addTile(GridLayout tiles, int icon, String title, String status, List<Intent> targets, int span) {
+        if (vision) return addVisionTile(tiles, icon, title, status, targets, span);
         View tile = getLayoutInflater().inflate(R.layout.item_quick_tile, tiles, false);
         tile.setId(View.generateViewId());
         ((ImageView) tile.findViewById(R.id.icon)).setImageResource(icon);
@@ -523,6 +888,37 @@ public final class QuickSettingsActivity extends Activity {
             lp.setMargins(dp(GAP_DP), dp(GAP_DP), dp(GAP_DP), dp(GAP_DP));
         }
         lp.height = dp(TILE_DP);
+        tiles.addView(tile, lp);
+        return tile;
+    }
+
+    /** On the vision panel: a round toggle in the grid, or (span 2, a paired device) a row on the devices card. */
+    private View addVisionTile(GridLayout tiles, int icon, String title, String status, List<Intent> targets, int span) {
+        LinearLayout list = findViewById(R.id.visionDevicesList);
+        View tile = getLayoutInflater().inflate(span == 2 ? R.layout.item_vision_row : R.layout.item_vision_toggle,
+                span == 2 ? list : tiles, false);
+        tile.setId(View.generateViewId());
+        ((ImageView) tile.findViewById(R.id.icon)).setImageResource(icon);
+        ((TextView) tile.findViewById(R.id.title)).setText(title);
+        if (status != null && !status.isEmpty()) {
+            TextView line = tile.findViewById(R.id.status);
+            line.setText(status);
+            line.setVisibility(View.VISIBLE);
+        }
+        if (targets != null) tile.setOnClickListener(v -> open(targets));
+        if (span == 2) {
+            list.addView(tile);
+            return tile;
+        }
+        // Filled row by row; in Hebrew each row from the right.
+        int index = tiles.getChildCount();
+        int columns = tiles.getColumnCount();
+        int column = index % columns;
+        if (HebrewFont.hebrew(this)) column = columns - 1 - column;
+        GridLayout.LayoutParams lp = new GridLayout.LayoutParams(
+                GridLayout.spec(index / columns), GridLayout.spec(column, 1f));
+        lp.width = 0;
+        lp.setMargins(dp(2), dp(4), dp(2), dp(4));
         tiles.addView(tile, lp);
         return tile;
     }

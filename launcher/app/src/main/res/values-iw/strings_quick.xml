@@ -14,4 +14,12 @@
     <string name="qs_play_pause">נגן או השהה</string>
     <string name="qs_next">הבא</string>
     <string name="qs_language">שפה</string>
+    <string name="qs_close">סגירה</string>
+    <string name="qs_not_playing">לא מתנגן כלום</string>
+    <string name="qs_clock_depth">עומק השעון</string>
+    <string name="qs_nav_sound">צליל ניווט</string>
+    <string name="qs_on">פועל</string>
+    <string name="qs_off">כבוי</string>
+    <string name="qs_glass">שקיפות</string>
+    <string name="qs_reorder">סידור</string>
 </resources>

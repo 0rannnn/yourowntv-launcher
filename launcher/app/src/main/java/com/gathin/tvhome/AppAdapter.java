@@ -105,15 +105,24 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
      */
     static int tileWidthPx(int innerWidthPx, int columns, float density) {
         int design = Math.round(DESIGN_W_DP * density);
-        if (innerWidthPx <= 0 || columns <= 0) return design;
+        if (innerWidthPx <= 0 || columns <= 0) return square ? Math.round(SQUARE_DP * density) : design;
         int cell = innerWidthPx / columns;
         int fit = (int) ((cell - 12 * density) / FOCUS_SCALE);
-        return Math.max(Math.round(80 * density), Math.min(design, fit));
+        int w = Math.max(Math.round(80 * density), Math.min(design, fit));
+        return square ? Math.min(w, Math.round(SQUARE_DP * density)) : w;
     }
 
     static int tileHeightPx(int tileWidthPx) {
-        return Math.round(tileWidthPx * DESIGN_H_DP / DESIGN_W_DP);
+        return square ? tileWidthPx : Math.round(tileWidthPx * DESIGN_H_DP / DESIGN_W_DP);
     }
+
+    /**
+     * The theme's square_tiles: small square app icons, as in a phone's dock, instead of 16:9 banners. Set once by
+     * MainActivity before the grid is built, so the static size helpers and the adapter agree.
+     */
+    static boolean square;
+    /** A square tile's side (dp). */
+    static final float SQUARE_DP = 92f;
 
     /** Height of one grid item: the tile, the name label under it and the item's own padding. */
     static int itemHeightPx(int tileHeightPx, float density) {
@@ -186,8 +195,6 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
     private final boolean singleRow;
     /** config always_show_names: the alpha of an unfocused tile's name (0 hides it). */
     private final float restNameAlpha;
-    /** cinematic_home: only then does a launch record the last-opened app the shelf uses. */
-    private final boolean cinematic;
     /** Dock order (config.xml dock_apps, or a theme's config.json). */
     private final List<String> favourites;
     /** Grid apps fill the dock slots dock_apps leaves free (config.xml, fill_dock). */
@@ -237,7 +244,6 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         this.dockRow = cfg.dockRow;
         this.singleRow = cfg.singleRow;
         this.restNameAlpha = cfg.alwaysShowNames ? 0.75f : 0f;
-        this.cinematic = cfg.cinematicHome;
         this.launchActions = cfg.launchActions;
         this.tileMenu = cfg.tileMenu;
         this.appLabels = cfg.appLabels;
@@ -529,7 +535,8 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         }
         try {
             ctx.startActivity(i);
-            if (cinematic) LastOpened.record(ctx, e.pkg);
+            // Kept whatever the look: the cinematic hero and the recent apps row both read it.
+            LastOpened.record(ctx, e.pkg);
             if (advancedEffects && !reducedMotion && ctx instanceof Activity) {
                 ((Activity) ctx).overridePendingTransition(R.anim.app_open_enter, R.anim.app_open_exit);
             }

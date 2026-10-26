@@ -85,6 +85,9 @@ if (Test-Path $font) { Invoke-Tv b64push.py $font "$tmp-clock_font.ttf"; Invoke-
 # Optional navigation sound for Home (NavSound), the same way.
 $sound = Join-Path $Theme 'nav_sound.wav'
 if (Test-Path $sound) { Invoke-Tv b64push.py $sound "$tmp-nav_sound.wav"; Invoke-Tv tv.py (Put 'nav_sound.wav') } else { Invoke-Tv tv.py (Drop 'nav_sound.wav') | Out-Null }
+# ui_font_he.ttf: the typeface Home's and the quick panel's text use while the launcher is in Hebrew.
+$uiFont = Join-Path $Theme 'ui_font_he.ttf'
+if (Test-Path $uiFont) { Invoke-Tv b64push.py $uiFont "$tmp-ui_font_he.ttf"; Invoke-Tv tv.py (Put 'ui_font_he.ttf') } else { Invoke-Tv tv.py (Drop 'ui_font_he.ttf') | Out-Null }
 Invoke-Tv tv.py $clearWallpapers | Out-Null
 foreach ($image in $images) {
     Invoke-Tv b64push.py $image.FullName (Stage "wallpapers/$($image.Name)")

@@ -18,4 +18,12 @@
     <!-- Each language by its own name, the same in every language. -->
     <string name="qs_lang_hebrew" translatable="false">עברית</string>
     <string name="qs_lang_english" translatable="false">English</string>
+    <string name="qs_close">Close</string>
+    <string name="qs_not_playing">Not playing</string>
+    <string name="qs_clock_depth">Clock depth</string>
+    <string name="qs_nav_sound">Click sound</string>
+    <string name="qs_on">On</string>
+    <string name="qs_off">Off</string>
+    <string name="qs_glass">Glass</string>
+    <string name="qs_reorder">Reorder</string>
 </resources>

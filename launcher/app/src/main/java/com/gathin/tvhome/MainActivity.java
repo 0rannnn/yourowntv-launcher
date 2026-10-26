@@ -106,6 +106,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     static final String ACTION_LAUNCHER_SETTINGS = "com.gathin.tvhome.action.LAUNCHER_SETTINGS";
     /** The system input switcher, forwarded here by InputsRequestActivity while handle_view_inputs is on. */
     static final String ACTION_VIEW_INPUTS = "com.android.tv.action.VIEW_INPUTS";
+    /** Sent by QuickSettingsActivity's Reorder toggle: start moving the apps, as the top bar's Reorder button does. */
+    static final String ACTION_REORDER = "com.gathin.tvhome.action.REORDER";
     /** Tiles per row and dock slots (res/values/config.xml, columns). Set in onCreate. */
     static int COLUMNS = 4;
     private boolean rtlAppGrid;
@@ -200,6 +202,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private String greetingName = "";
     /** Clock font, weather and location in the header (config.json; see HeaderExtras). */
     private HeaderExtras headerExtras;
+    /** recent_apps: cards for the apps opened last, above the dock; null when the theme has none. */
+    private RecentRow recentRow;
     /** LauncherLocale.revision this Home was built with; a different one in onResume rebuilds it. */
     private int localeRevision;
     /** Hebrew bar: sizes and places the greeting against the clock, after layout and after a new greeting text. */
@@ -398,6 +402,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         density = getResources().getDisplayMetrics().density;
         // config.xml, overlaid by config.json from a pushed theme (see Config and tools/theme.sh).
         Config cfg = Config.load(this);
+        AppAdapter.square = HeaderExtras.themeFlag(this, "square_tiles");
         homeAppKeys = RemoteKeys.parseAppKeys(cfg.appKeys);
         appLibrarySelection = cfg.appLibrarySelection;
         libraryOkOpens = cfg.libraryOkOpens;
@@ -634,6 +639,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         Order savedOrder = Order.load(Order.file(this));
         adapter.setSavedOrder(Order.ranks(savedOrder, dockApps), Order.docked(savedOrder, dockApps));
         grid.setAdapter(adapter);
+        if (HeaderExtras.themeFlag(this, "recent_apps")) {
+            recentRow = new RecentRow(this, root, grid, this::focusTopBar,
+                    () -> focusTile(singleRow ? lastFocused : lastFocused % COLUMNS));
+        }
 
         // tvOS layout: push the dock row towards the bottom of the screen, leaving room for
         // rows_below_dock grid rows under it; the rest of the grid stays below until you press Down.
@@ -832,6 +841,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         btnReorder.setOnKeyListener(pillKeys);
         btnLibraryTop.setOnKeyListener(pillKeys);
         for (View button : topAppButtons) button.setOnKeyListener(pillKeys);
+        if (HeaderExtras.themeFlag(this, "center_clock")) stackTopButtons();
         if (advancedEffects) {
             List<View> pills = new ArrayList<>(Arrays.asList(btnInputs, btnWifi, btnVpn, btnReorder, btnLibraryTop, btnSettings));
             pills.addAll(topAppButtons);
@@ -842,6 +852,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             }
         }
         if (festive) applyFestiveSkin((TextView) btnInputs, (TextView) btnSettings);
+        HebrewFont.apply(root);
 
         // Hide the glass when focus leaves the tiles.
         getWindow().getDecorView().getViewTreeObserver().addOnGlobalFocusChangeListener((oldF, newF) -> {
@@ -874,7 +885,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                     .build(), vpnCallback);
         }
         // Not after recreate(): the launch intent survives it and would open the settings again.
-        if (savedInstanceState == null && !openLauncherSettingsIfAsked(getIntent())) openInputsIfAsked(getIntent());
+        if (savedInstanceState == null && !openLauncherSettingsIfAsked(getIntent()) && !openReorderIfAsked(getIntent())) {
+            openInputsIfAsked(getIntent());
+        }
     }
 
     /**
@@ -927,6 +940,16 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         return true;
     }
 
+    /** ACTION_REORDER: reorder mode once the tiles are laid out (the panel has just closed over Home). */
+    private boolean openReorderIfAsked(Intent intent) {
+        if (intent == null || !ACTION_REORDER.equals(intent.getAction())) return false;
+        setIntent(new Intent(Intent.ACTION_MAIN));
+        grid.postDelayed(() -> {
+            if (!isFinishing() && !reordering) toggleReorder();
+        }, 300);
+        return true;
+    }
+
     private boolean openLauncherSettingsIfAsked(Intent intent) {
         if (intent == null || !ACTION_LAUNCHER_SETTINGS.equals(intent.getAction())) return false;
         setIntent(new Intent(Intent.ACTION_MAIN));
@@ -944,6 +967,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         super.onNewIntent(intent);
         if (openLauncherSettingsIfAsked(intent)) return;
         if (openInputsIfAsked(intent)) return;
+        if (openReorderIfAsked(intent)) return;
         if (intent == null || !intent.hasCategory(Intent.CATEGORY_HOME)) return;
         grid.scrollToPosition(0);
         lastFocused = 0;
@@ -981,6 +1005,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             return;
         }
         if (headerExtras != null) headerExtras.onResume();
+        if (recentRow != null) recentRow.refresh();
+        if (wallpaperPlayer != null) wallpaperPlayer.showCutOut(HomeToggles.clockBehind(this));
         if (navSound != null) navSound.muteSystemTick();
         // A festival that started or ended while Home was in the background: rebuild with or without it.
         if (festive != festival.active(LocalDate.now())) {
@@ -2290,7 +2316,17 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (singleRow) {
             // One row: Up leaves for the top bar, Down has nowhere to go, and Left/Right walk the whole row,
             // stopping at its two ends (the default focus search scrolls the row to the next tile).
-            if (keyCode == KeyEvent.KEYCODE_DPAD_UP) return false;
+            if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+                // Up: the recent apps above the dock, else the top-right buttons. The default focus search finds
+                // neither when they are not straight above the tile.
+                RecyclerView.ViewHolder from = grid.findViewHolderForAdapterPosition(position);
+                if (recentRow != null && recentRow.focusNear(from != null ? from.itemView : null)) return true;
+                if (topBarEntry != null) {
+                    focusTopBar();
+                    return true;
+                }
+                return false;
+            }
             if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) return true;
             boolean forward = rtlAppGrid ? keyCode == KeyEvent.KEYCODE_DPAD_LEFT : keyCode == KeyEvent.KEYCODE_DPAD_RIGHT;
             int last = adapter.focusablePosition(count - 1);
@@ -2358,6 +2394,95 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             ((LinearLayout.LayoutParams) clockRow.getLayoutParams()).gravity = Gravity.RIGHT;
         }
         clockColumn.addView(column, clockColumn.indexOfChild(clockRow) + 1, lp);
+    }
+
+    /**
+     * center_clock: the top bar becomes Inputs over a 2 x 2 grid of the round buttons, kept in the top corner clear of
+     * the centred clock. The D-pad moves within it; Down from its bottom row returns to the dock tile Up came from.
+     */
+    private void stackTopButtons() {
+        LinearLayout bar = findViewById(R.id.topButtons);
+        List<View> buttons = new ArrayList<>();
+        for (int i = 0; i < bar.getChildCount(); i++) {
+            View button = bar.getChildAt(i);
+            if (button != btnInputs && button.getVisibility() == View.VISIBLE) buttons.add(button);
+        }
+        if (buttons.isEmpty()) return;
+        for (View button : buttons) bar.removeView(button);
+        bar.setOrientation(LinearLayout.VERTICAL);
+        bar.setGravity(Gravity.CENTER_HORIZONTAL);
+        int columns = 2;
+        int gap = Math.round(8 * density);
+        List<View[]> rows = new ArrayList<>();
+        for (int i = 0; i < buttons.size(); i += columns) {
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setClipChildren(false);
+            row.setClipToPadding(false);
+            View[] cells = new View[columns];
+            for (int c = 0; c < columns && i + c < buttons.size(); c++) {
+                View button = buttons.get(i + c);
+                cells[c] = button;
+                row.addView(button);
+            }
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            lp.topMargin = gap;
+            bar.addView(row, lp);
+            rows.add(cells);
+        }
+        boolean inputs = btnInputs.getVisibility() == View.VISIBLE;
+        for (int r = 0; r < rows.size(); r++) {
+            for (int c = 0; c < columns; c++) {
+                View button = rows.get(r)[c];
+                if (button == null) continue;
+                View up = r > 0 ? rows.get(r - 1)[c] : inputs ? btnInputs : null;
+                View down = r + 1 < rows.size() ? rows.get(r + 1)[c] : null;
+                View left = c > 0 ? rows.get(r)[c - 1] : null;
+                View right = c + 1 < columns ? rows.get(r)[c + 1] : null;
+                button.setOnKeyListener((v, keyCode, event) -> {
+                    if (event.getAction() != KeyEvent.ACTION_DOWN) return false;
+                    View to = null;
+                    if (keyCode == KeyEvent.KEYCODE_DPAD_UP) to = up;
+                    else if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) to = left;
+                    else if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) to = right;
+                    else if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+                        if (down == null) {
+                            if (recentRow == null || !recentRow.focus()) {
+                                focusTile(singleRow ? lastFocused : lastFocused % COLUMNS);
+                            }
+                            return true;
+                        }
+                        to = down;
+                    } else {
+                        return false;
+                    }
+                    if (to != null) to.requestFocus();
+                    return true;
+                });
+            }
+        }
+        View firstRowRight = rows.get(0)[columns - 1] != null ? rows.get(0)[columns - 1] : rows.get(0)[0];
+        // Up from the cards or the dock lands on the bottom row's Settings side, nearest the screen's edge.
+        View[] bottom = rows.get(rows.size() - 1);
+        topBarEntry = bottom[columns - 1] != null ? bottom[columns - 1] : bottom[0];
+        btnInputs.setOnKeyListener((v, keyCode, event) -> {
+            if (event.getAction() != KeyEvent.ACTION_DOWN) return false;
+            if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+                firstRowRight.requestFocus();
+                return true;
+            }
+            return keyCode == KeyEvent.KEYCODE_DPAD_UP || keyCode == KeyEvent.KEYCODE_DPAD_LEFT
+                    || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT;
+        });
+    }
+
+    /** stackTopButtons: the button Up from the recent apps or the dock focuses. */
+    private View topBarEntry;
+
+    private void focusTopBar() {
+        View to = topBarEntry != null ? topBarEntry : findViewById(R.id.btnSettings);
+        if (to != null) to.requestFocus();
     }
 
     /** The first top-bar button after Inputs that is shown, in bar order (top_bar_apps, the network pill, ...); Settings is always there. */

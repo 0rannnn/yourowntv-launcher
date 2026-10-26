@@ -1,0 +1,241 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The quick settings panel in the manner of visionOS (theme vision_panel): three light glass cards floating in the
+     middle of the screen over a dim. Left, the clock and what is playing; middle, round toggles under the language,
+     gear and close buttons; right, the paired Bluetooth devices. The ids the right-edge panel uses are kept, so
+     QuickSettingsActivity fills either. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/scrim"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/vision_scrim">
+
+    <LinearLayout
+        android:id="@+id/panel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:clipChildren="false"
+        android:clipToPadding="false">
+
+        <!-- Clock and now playing. -->
+        <LinearLayout
+            android:id="@+id/visionNow"
+            android:layout_width="270dp"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/vision_card"
+            android:padding="20dp"
+            android:elevation="16dp">
+
+            <TextClock
+                android:id="@+id/qsDate"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:format12Hour="EEEE, MMMM d"
+                android:format24Hour="EEEE, MMMM d"
+                android:textColor="@color/text_secondary"
+                android:textSize="13sp"
+                android:fontFamily="@string/font_medium" />
+
+            <TextClock
+                android:id="@+id/qsTime"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:format12Hour="h:mm"
+                android:format24Hour="H:mm"
+                android:textColor="@color/text_primary"
+                android:textSize="56sp"
+                android:includeFontPadding="false"
+                android:fontFamily="@string/font_extralight" />
+
+            <LinearLayout
+                android:id="@+id/visionMedia"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="18dp"
+                android:orientation="vertical" />
+        </LinearLayout>
+
+        <!-- Toggles. -->
+        <LinearLayout
+            android:layout_width="380dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:layout_marginEnd="16dp"
+            android:orientation="vertical"
+            android:background="@drawable/vision_card"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingTop="16dp"
+            android:paddingBottom="12dp"
+            android:elevation="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <LinearLayout
+                    android:id="@+id/qsLang"
+                    android:layout_width="wrap_content"
+                    android:layout_height="40dp"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="14dp"
+                    android:background="@drawable/pill_bg"
+                    android:focusable="true"
+                    android:clickable="true"
+                    android:contentDescription="@string/qs_language">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="א/A"
+                        android:textColor="@drawable/pill_text"
+                        android:duplicateParentState="true"
+                        android:textSize="15sp"
+                        android:fontFamily="@string/font_medium"
+                        tools:ignore="HardcodedText" />
+
+                    <TextView
+                        android:id="@+id/qsLangName"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:textColor="@drawable/pill_text_dim"
+                        android:duplicateParentState="true"
+                        android:textSize="13sp"
+                        android:fontFamily="@string/font_regular" />
+                </LinearLayout>
+
+                <View
+                    android:layout_width="0dp"
+                    android:layout_height="1dp"
+                    android:layout_weight="1" />
+
+                <ImageView
+                    android:id="@+id/qsGear"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:padding="10dp"
+                    android:src="@drawable/ic_settings"
+                    android:tint="@drawable/pill_text"
+                    android:background="@drawable/vision_toggle_bg"
+                    android:focusable="true"
+                    android:clickable="true"
+                    android:contentDescription="@string/tv_settings" />
+
+                <ImageView
+                    android:id="@+id/qsClose"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_marginStart="8dp"
+                    android:padding="11dp"
+                    android:src="@drawable/ic_close"
+                    android:tint="@drawable/pill_text"
+                    android:background="@drawable/vision_toggle_bg"
+                    android:focusable="true"
+                    android:clickable="true"
+                    android:contentDescription="@string/qs_close" />
+            </LinearLayout>
+
+            <GridLayout
+                android:id="@+id/tiles"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:columnCount="5"
+                android:useDefaultMargins="false" />
+
+            <!-- Glass: how see-through the cards, the clock and Home's glass are. Left and Right move it. -->
+            <LinearLayout
+                android:id="@+id/visionGlassRow"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingStart="6dp"
+                android:paddingEnd="2dp">
+
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:src="@drawable/ic_glass"
+                    android:contentDescription="@null" />
+
+                <TextView
+                    android:id="@+id/visionGlassLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="@string/qs_glass"
+                    android:textColor="@color/text_primary"
+                    android:textSize="13sp"
+                    android:fontFamily="@string/font_medium" />
+
+                <SeekBar
+                    android:id="@+id/visionGlass"
+                    android:layout_width="0dp"
+                    android:layout_height="36dp"
+                    android:layout_weight="1"
+                    android:minHeight="4dp"
+                    android:maxHeight="4dp"
+                    android:max="100"
+                    android:focusable="true"
+                    android:background="@drawable/vision_slider_bg"
+                    android:progressTint="@color/text_primary"
+                    android:progressBackgroundTint="#66FFFFFF"
+                    android:thumbTint="@color/text_primary" />
+
+                <TextView
+                    android:id="@+id/visionGlassValue"
+                    android:layout_width="42dp"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp"
+                    android:fontFamily="@string/font_medium" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Paired devices; hidden when there are none. -->
+        <LinearLayout
+            android:id="@+id/visionDevices"
+            android:layout_width="250dp"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/vision_card"
+            android:padding="16dp"
+            android:elevation="16dp"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:layout_marginBottom="4dp"
+                android:text="@string/qs_bt_devices"
+                android:textColor="@color/text_secondary"
+                android:textSize="13sp"
+                android:fontFamily="@string/font_medium" />
+
+            <ScrollView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:scrollbars="none">
+
+                <LinearLayout
+                    android:id="@+id/visionDevicesList"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+            </ScrollView>
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>

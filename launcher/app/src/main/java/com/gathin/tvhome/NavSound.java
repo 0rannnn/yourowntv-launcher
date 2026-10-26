@@ -58,6 +58,8 @@ final class NavSound {
     void focusMoved() {
         long now = SystemClock.uptimeMillis();
         if (!loaded || now - lastKey > KEY_WINDOW_MS || now - lastPlayed < MIN_GAP_MS) return;
+        // Muted from the quick panel: silent, and the system tick stays off as well.
+        if (HomeToggles.navMuted(context)) return;
         lastPlayed = now;
         pool.play(sound, 1f, 1f, 1, 0, 1f);
     }

@@ -14,6 +14,16 @@ final class WallpaperRotation {
     static final String ORDER_SEQUENTIAL = "sequential";
     static final String ORDER_SHUFFLE = "shuffle";
 
+    /** The foreground cut-out beside a wallpaper: 01-peak.jpg has 01-peak.fg.png. */
+    static final String FOREGROUND_SUFFIX = ".fg.png";
+
+    /** The cut-out file for a wallpaper, whether or not it exists. */
+    static File foregroundOf(File wallpaper) {
+        String name = wallpaper.getName();
+        int dot = name.lastIndexOf('.');
+        return new File(wallpaper.getParentFile(), (dot > 0 ? name.substring(0, dot) : name) + FOREGROUND_SUFFIX);
+    }
+
     static boolean validOrder(String order) {
         return ORDER_SEQUENTIAL.equals(order) || ORDER_SHUFFLE.equals(order);
     }
@@ -25,6 +35,9 @@ final class WallpaperRotation {
         Arrays.sort(entries, Comparator.comparing(File::getName));
         for (File entry : entries) {
             String name = entry.getName().toLowerCase(Locale.ROOT);
+            // NN-name.fg.png is a picture's foreground cut-out (WallpaperPlayer draws it over the clock), not a
+            // wallpaper of its own.
+            if (name.endsWith(FOREGROUND_SUFFIX)) continue;
             if (entry.isFile() && entry.length() > 0 && entry.length() <= 10 * 1024 * 1024
                     && (name.endsWith(".jpg") || name.endsWith(".jpeg")
                     || name.endsWith(".png") || name.endsWith(".webp"))) {

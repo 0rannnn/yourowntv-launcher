@@ -3,20 +3,33 @@ package com.gathin.tvhome;
 import android.app.Activity;
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.LinearGradient;
+import android.graphics.Paint;
+import android.graphics.Rect;
+import android.graphics.Shader;
 import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.os.Handler;
 import android.os.Looper;
+import android.text.Editable;
 import android.text.SpannableStringBuilder;
 import android.text.Spanned;
+import android.text.TextPaint;
+import android.text.TextWatcher;
+import android.text.format.DateFormat;
 import android.text.style.ImageSpan;
+import android.util.DisplayMetrics;
 import android.util.Log;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.TextClock;
 import android.widget.TextView;
 
 import org.json.JSONObject;
@@ -40,6 +53,10 @@ import java.util.Locale;
  * <li>{@code weather_lat} / {@code weather_lon}: the temperature in degrees Celsius and an icon for the sky beside the
  * clock, from Open-Meteo (no account). Read when Home comes up, at most every 30 minutes, never in the background;
  * the last reading is kept so Home shows it at once.</li>
+ * <li>{@code center_clock}: the time huge and centred near the top, behind the wallpaper's foreground cut-out
+ * (WallpaperPlayer), with one line above it: greeting and place, date, weather. The corner clock is hidden.
+ * {@code center_clock_size} is the type size as a share of the screen height (0.36). The digits are glass: a
+ * translucent fill with a brighter edge. The quick panel's clock-depth switch (HomeToggles) takes the cut-out away.</li>
  * </ul>
  */
 final class HeaderExtras {
@@ -57,6 +74,13 @@ final class HeaderExtras {
     private final boolean weather;
     /** clock_font_weight: 100 (thin) to 900 (black) for a variable clock font; 0 leaves the font's default. */
     private final int fontWeight;
+    private final boolean centerClock;
+    private final float centerClockSize;
+    /** Where the top of the centred clock's digits sits, as a share of the screen height (prepare.py's CLOCK_BOX). */
+    private static final float CENTER_CLOCK_TOP = 0.12f;
+    /** The centred clock and the band its digits fill, for the glass slider to redraw it. */
+    private GlassClock glassClock;
+    private float glassTop, glassBottom;
     private ImageView weatherIcon;
     private TextView weatherTemp;
     private boolean fetching;
@@ -75,10 +99,30 @@ final class HeaderExtras {
         lon = json != null ? json.optDouble("weather_lon", Double.NaN) : Double.NaN;
         weather = !Double.isNaN(lat) && !Double.isNaN(lon);
         fontWeight = json != null ? json.optInt("clock_font_weight", 0) : 0;
+        centerClock = json != null && json.optBoolean("center_clock", false);
+        float size = json != null ? (float) json.optDouble("center_clock_size", 0.36) : 0.36f;
+        centerClockSize = size > 0.05f && size < 0.6f ? size : 0.36f;
+    }
+
+    /** A true/false key of the theme's config.json, false when the theme has none. */
+    static boolean themeFlag(Context ctx, String key) {
+        JSONObject json = readConfig(ctx);
+        return json != null && json.optBoolean(key, false);
     }
 
     /** Once, after setContentView: the clock's typeface and the weather views beside it. */
     void attach(TextView clock) {
+        applyClockFont(clock);
+        if (centerClock) {
+            addCenterClock();
+            return;
+        }
+        if (weather) addWeatherViews(clock);
+    }
+
+    private void applyClockFont(TextView clock) {
+        // The clocks keep their own typeface in Hebrew too (HebrewFont).
+        clock.setTag(HebrewFont.KEEP);
         File dir = Config.dir(activity);
         File font = dir != null ? new File(dir, CLOCK_FONT) : null;
         if (font != null && font.isFile() && font.length() > 0) {
@@ -91,7 +135,158 @@ final class HeaderExtras {
                 Log.w(TAG, "clock font unreadable: " + e.getMessage());
             }
         }
-        if (weather) addWeatherViews(clock);
+    }
+
+    /**
+     * The centred clock and the line above it, as children of the root just under the wallpaper's cut-out, so the
+     * landscape stands in front of the time. The corner clock stays in place, invisible, for the header's height.
+     */
+    private void addCenterClock() {
+        ViewGroup root = activity.findViewById(R.id.root);
+        if (!(root instanceof FrameLayout)) return;
+        View corner = activity.findViewById(R.id.leftBlock);
+        if (corner != null) corner.setAlpha(0f);
+        // The round buttons go up into the top-right corner, a little smaller, clear of the line and the clock.
+        View buttons = activity.findViewById(R.id.topButtons);
+        if (buttons != null) {
+            int edge = Math.round(8 * activity.getResources().getDisplayMetrics().density);
+            buttons.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
+                v.setPivotX(v.getWidth());
+                v.setPivotY(0);
+                v.setScaleX(0.9f);
+                v.setScaleY(0.9f);
+                int[] at = new int[2];
+                v.getLocationInWindow(at);
+                v.setTranslationY(edge - (at[1] - v.getTranslationY()));
+            });
+        }
+        float density = activity.getResources().getDisplayMetrics().density;
+        DisplayMetrics screen = new DisplayMetrics();
+        activity.getWindowManager().getDefaultDisplay().getRealMetrics(screen);
+        int height = screen.heightPixels;
+
+        GlassClock clock = new GlassClock(activity);
+        clock.setFormat12Hour("h:mm");
+        clock.setFormat24Hour("H:mm");
+        clock.setIncludeFontPadding(false);
+        clock.setTextColor(Color.WHITE);
+        clock.setTextSize(TypedValue.COMPLEX_UNIT_PX, centerClockSize * height);
+        applyClockFont(clock);
+        clock.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        // Where the digits' tops fall inside the view: the view moves so they land on CENTER_CLOCK_TOP.
+        Paint paint = clock.getPaint();
+        Rect digits = new Rect();
+        paint.getTextBounds("0123456789", 0, 10, digits);
+        float inset = -paint.getFontMetrics().ascent + digits.top;
+        float glyphTop = CENTER_CLOCK_TOP * height;
+        glassClock = clock;
+        glassTop = inset;
+        glassBottom = inset + digits.height();
+        applyGlass();
+        FrameLayout.LayoutParams clockLp = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+        clockLp.topMargin = Math.round(glyphTop - inset);
+
+        LinearLayout line = new LinearLayout(activity);
+        line.setOrientation(LinearLayout.HORIZONTAL);
+        line.setGravity(Gravity.CENTER_VERTICAL);
+        Locale locale = activity.getResources().getConfiguration().getLocales().get(0);
+        java.util.List<View> parts = new java.util.ArrayList<>();
+        TextView greeting = activity.findViewById(R.id.greeting);
+        if (greeting != null && greeting.getVisibility() == View.VISIBLE) {
+            TextView copy = lineText();
+            copy.setText(greeting.getText());
+            greeting.addTextChangedListener(new TextWatcher() {
+                @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) { }
+                @Override public void onTextChanged(CharSequence s, int a, int b, int c) { }
+                @Override public void afterTextChanged(Editable s) { copy.setText(greeting.getText()); }
+            });
+            parts.add(copy);
+        }
+        TextClock date = new TextClock(activity);
+        styleLineText(date);
+        String pattern = DateFormat.getBestDateTimePattern(locale, "EEEEdMMMM");
+        date.setFormat12Hour(pattern);
+        date.setFormat24Hour(pattern);
+        parts.add(date);
+        if (weather) parts.add(weatherBox(density, 19, 17));
+        // The launcher lays out left to right; Hebrew reads the line from the right.
+        if ("iw".equals(locale.getLanguage())) java.util.Collections.reverse(parts);
+        for (int i = 0; i < parts.size(); i++) {
+            if (i > 0) {
+                TextView dot = lineText();
+                dot.setText("\u00B7");
+                LinearLayout.LayoutParams dotLp = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                dotLp.leftMargin = Math.round(12 * density);
+                dotLp.rightMargin = Math.round(12 * density);
+                line.addView(dot, dotLp);
+            }
+            line.addView(parts.get(i));
+        }
+        FrameLayout.LayoutParams lineLp = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+        int gap = Math.round(8 * density);
+        // Its foot sits just over the digits' tops, whatever height the line comes out at.
+        line.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) ->
+                v.setTranslationY(glyphTop - gap - v.getHeight()));
+
+        View cutOut = root.findViewWithTag(WallpaperPlayer.FOREGROUND_TAG);
+        int at = cutOut != null ? root.indexOfChild(cutOut) : root.indexOfChild(activity.findViewById(R.id.sky)) + 1;
+        root.addView(line, Math.max(at, 0), lineLp);
+        root.addView(clock, Math.max(at, 0), clockLp);
+        HebrewFont.apply(line);
+    }
+
+    /** The centred clock's digits drawn twice: a translucent fill, then a thin brighter edge over it. */
+    private static final class GlassClock extends TextClock {
+        private Shader fill;
+        private Shader edge;
+        private float edgeWidth;
+
+        GlassClock(Context context) {
+            super(context);
+        }
+
+        void setGlass(Shader fill, Shader edge, float edgeWidth) {
+            this.fill = fill;
+            this.edge = edge;
+            this.edgeWidth = edgeWidth;
+            getPaint().setShader(fill);
+            invalidate();
+        }
+
+        @Override
+        protected void onDraw(Canvas canvas) {
+            TextPaint paint = getPaint();
+            paint.setStyle(Paint.Style.FILL);
+            paint.setShader(fill);
+            super.onDraw(canvas);
+            if (edge == null) return;
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(edgeWidth);
+            paint.setShader(edge);
+            super.onDraw(canvas);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setShader(fill);
+        }
+    }
+
+    private TextView lineText() {
+        TextView text = new TextView(activity);
+        styleLineText(text);
+        return text;
+    }
+
+    private void styleLineText(TextView text) {
+        text.setTextColor(activity.getColor(R.color.text_primary));
+        text.setTextSize(TypedValue.COMPLEX_UNIT_SP, 17);
+        text.setTypeface(activity.getResources().getFont(R.font.outfit_light));
+        text.setIncludeFontPadding(false);
+        text.setSingleLine(true);
+        text.setShadowLayer(10, 0, 1, 0x80000000);
     }
 
     /** greeting_name_he (or _ar...) while the launcher shows that language, else the theme's greeting_name. */
@@ -120,8 +315,30 @@ final class HeaderExtras {
         return text.append(location);
     }
 
+    /**
+     * Glass: the photo shows through the digits, more towards the foot, and a brighter rim catches the light. How much
+     * shows through follows the quick panel's glass slider.
+     */
+    private void applyGlass() {
+        if (glassClock == null) return;
+        int level = HomeToggles.glass(activity);
+        float density = activity.getResources().getDisplayMetrics().density;
+        glassClock.setGlass(new LinearGradient(0, glassTop, 0, glassBottom,
+                        white(HomeToggles.mix(0xF0, 0x66, level)), white(HomeToggles.mix(0xC0, 0x30, level)),
+                        Shader.TileMode.CLAMP),
+                new LinearGradient(0, glassTop, 0, glassBottom,
+                        white(HomeToggles.mix(0xFF, 0xE6, level)), white(HomeToggles.mix(0x80, 0x70, level)),
+                        Shader.TileMode.CLAMP),
+                Math.max(1.5f, 1.25f * density));
+    }
+
+    private static int white(int alpha) {
+        return (alpha << 24) | 0xFFFFFF;
+    }
+
     /** Home came up: show the last reading and fetch a new one when it is due. */
     void onResume() {
+        applyGlass();
         if (!weather || weatherTemp == null) return;
         SharedPreferences prefs = activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         show(prefs.getInt("temp", Integer.MIN_VALUE), prefs.getInt("code", -1), prefs.getBoolean("day", true));
@@ -192,23 +409,8 @@ final class HeaderExtras {
         if (clockSide.getParent() != row) return;
         float density = activity.getResources().getDisplayMetrics().density;
 
-        LinearLayout box = new LinearLayout(activity);
-        box.setOrientation(LinearLayout.HORIZONTAL);
-        box.setGravity(Gravity.CENTER_VERTICAL);
-        box.setVisibility(View.GONE);
-        weatherIcon = new ImageView(activity);
         // Secondary to the clock: smaller, and in the design system's secondary white.
-        int iconSize = Math.round(28 * density);
-        box.addView(weatherIcon, new LinearLayout.LayoutParams(iconSize, iconSize));
-        weatherTemp = new TextView(activity);
-        weatherTemp.setTextColor(activity.getColor(R.color.text_primary));
-        weatherTemp.setTextSize(TypedValue.COMPLEX_UNIT_SP, 24);
-        weatherTemp.setTypeface(activity.getResources().getFont(R.font.outfit_light));
-        weatherTemp.setIncludeFontPadding(false);
-        LinearLayout.LayoutParams tempLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        tempLp.setMarginStart(Math.round(6 * density));
-        box.addView(weatherTemp, tempLp);
+        LinearLayout box = weatherBox(density, 28, 24);
 
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -218,6 +420,28 @@ final class HeaderExtras {
         lp.rightMargin = Math.round(4 * density);
         int dividerAt = row.indexOfChild(divider);
         row.addView(box, row.indexOfChild(clockSide) < dividerAt ? dividerAt : dividerAt + 1, lp);
+    }
+
+    /** The sky icon and the temperature, hidden until there is a reading. */
+    private LinearLayout weatherBox(float density, int iconDp, int textSp) {
+        LinearLayout box = new LinearLayout(activity);
+        box.setOrientation(LinearLayout.HORIZONTAL);
+        box.setGravity(Gravity.CENTER_VERTICAL);
+        box.setVisibility(View.GONE);
+        weatherIcon = new ImageView(activity);
+        int iconSize = Math.round(iconDp * density);
+        box.addView(weatherIcon, new LinearLayout.LayoutParams(iconSize, iconSize));
+        weatherTemp = new TextView(activity);
+        weatherTemp.setTextColor(activity.getColor(R.color.text_primary));
+        weatherTemp.setTextSize(TypedValue.COMPLEX_UNIT_SP, textSp);
+        weatherTemp.setTypeface(activity.getResources().getFont(R.font.outfit_light));
+        weatherTemp.setIncludeFontPadding(false);
+        weatherTemp.setShadowLayer(10, 0, 1, 0x80000000);
+        LinearLayout.LayoutParams tempLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        tempLp.setMarginStart(Math.round(6 * density));
+        box.addView(weatherTemp, tempLp);
+        return box;
     }
 
     private static JSONObject readConfig(Context ctx) {
