@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Weather: clear night. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="36dp" android:height="36dp"
+    android:viewportWidth="48" android:viewportHeight="48">
+    <path android:fillColor="#FFFFE7A3"
+        android:pathData="M30,6C20.6,7 13.5,15 13.5,24.5S21,42 30.5,42c4,0 7.7,-1.4 10.6,-3.7C29.5,38.5 21,30.6 21,20.5c0,-5.9 3.4,-11.2 9,-14.5z" />
+    <path android:fillColor="#B3FFFFFF" android:pathData="M38,10l1,2.5 2.5,1 -2.5,1 -1,2.5 -1,-2.5 -2.5,-1 2.5,-1z" />
+    <path android:fillColor="#80FFFFFF" android:pathData="M42,22l0.6,1.4 1.4,0.6 -1.4,0.6 -0.6,1.4 -0.6,-1.4 -1.4,-0.6 1.4,-0.6z" />
+</vector>

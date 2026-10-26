@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Weather: overcast. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="36dp" android:height="36dp"
+    android:viewportWidth="48" android:viewportHeight="48">
+    <path android:fillColor="#FFB8C4D6"
+        android:pathData="M14,36h22a8,8 0,0 0,1.2 -15.9A11,11 0,0 0,16.4 18.6,9 9,0 0,0 14,36z" />
+    <path android:fillColor="#FFF2F5FA"
+        android:pathData="M12,40h20a7,7 0,0 0,1 -13.9A9.5,9.5 0,0 0,14.6 25,7.5 7.5,0 0,0 12,40z" />
+</vector>

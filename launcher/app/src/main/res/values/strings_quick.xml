@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Quick settings tiles. Translated into Hebrew only so far (values-iw); other languages fall back to English. -->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
+    <string name="qs_screensaver">Screensaver</string>
+    <string name="qs_bluetooth">Bluetooth</string>
+    <string name="qs_sound">Sound</string>
+    <string name="qs_accessibility">Accessibility</string>
+    <string name="qs_keystone">Keystone</string>
+    <string name="qs_launcher">Launcher</string>
+    <string name="qs_bt_devices">Bluetooth devices</string>
+    <string name="qs_connected">Connected</string>
+    <string name="qs_not_connected">Not connected</string>
+    <string name="qs_resume">Resume</string>
+    <string name="qs_previous">Previous</string>
+    <string name="qs_play_pause">Play or pause</string>
+    <string name="qs_next">Next</string>
+    <string name="qs_language">Language</string>
+    <!-- Each language by its own name, the same in every language. -->
+    <string name="qs_lang_hebrew" translatable="false">עברית</string>
+    <string name="qs_lang_english" translatable="false">English</string>
+</resources>

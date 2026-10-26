@@ -198,6 +198,14 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private boolean shamsi;
     /** greeting_name: said after the greeting, which is shown in capitals. */
     private String greetingName = "";
+    /** Clock font, weather and location in the header (config.json; see HeaderExtras). */
+    private HeaderExtras headerExtras;
+    /** LauncherLocale.revision this Home was built with; a different one in onResume rebuilds it. */
+    private int localeRevision;
+    /** Hebrew bar: sizes and places the greeting against the clock, after layout and after a new greeting text. */
+    private Runnable hebrewGreeting;
+    /** The theme's own navigation sound (nav_sound.wav), or null for the system tick. */
+    private NavSound navSound;
     /** Optional time-of-day backdrop (config.xml, sky_intensity); 0 keeps it hidden. */
     private SkyView sky;
     private String vpnApp;
@@ -462,6 +470,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         // still follows the dock.
         if (!cfg.dockTitle) hero.setVisibility(View.GONE);
         greeting = findViewById(R.id.greeting);
+        localeRevision = LauncherLocale.revision;
+        headerExtras = new HeaderExtras(this);
+        headerExtras.attach(findViewById(R.id.clock));
+        navSound = NavSound.load(this);
         clockBlock = findViewById(R.id.leftBlock);
         greetingColor = greeting.getCurrentTextColor();
         if (!cfg.showGreeting) greeting.setVisibility(View.GONE);
@@ -475,7 +487,26 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             // is watched too: date_below_clock can move the whole row right under a wider date.
             View clock = findViewById(R.id.clock);
             View clockRow = (View) clock.getParent();
-            View.OnLayoutChangeListener centerGreeting = (v, l, t, right, bottom, ol, ot, or, ob) -> {
+            // With a location after it the greeting is longer than the time. The greeting and the clock share one
+            // column whose width the greeting would shrink to fit: instead the column takes the greeting's own width,
+            // and both stay against its right edge, so the line runs leftwards from the clock at full size.
+            boolean longGreeting = headerExtras.hasLocation();
+            if (longGreeting) {
+                greeting.setAutoSizeTextTypeWithDefaults(TextView.AUTO_SIZE_TEXT_TYPE_NONE);
+                greeting.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+                greeting.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+                ViewGroup.LayoutParams params = greeting.getLayoutParams();
+                params.width = ViewGroup.LayoutParams.WRAP_CONTENT;
+                greeting.setLayoutParams(params);
+                if (greeting.getLayoutParams() instanceof LinearLayout.LayoutParams) {
+                    ((LinearLayout.LayoutParams) greeting.getLayoutParams()).gravity = Gravity.RIGHT;
+                }
+                if (clockRow.getLayoutParams() instanceof LinearLayout.LayoutParams) {
+                    ((LinearLayout.LayoutParams) clockRow.getLayoutParams()).gravity = Gravity.RIGHT;
+                }
+            }
+            hebrewGreeting = () -> {
+                if (longGreeting) return;
                 ViewGroup.LayoutParams params = greeting.getLayoutParams();
                 if (params.width != clock.getWidth()) {
                     params.width = clock.getWidth();
@@ -483,6 +514,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 }
                 greeting.setTranslationX(clockRow.getLeft() + clock.getLeft());
             };
+            View.OnLayoutChangeListener centerGreeting = (v, l, t, right, bottom, ol, ot, or, ob) -> hebrewGreeting.run();
             clock.addOnLayoutChangeListener(centerGreeting);
             clockRow.addOnLayoutChangeListener(centerGreeting);
         }
@@ -735,6 +767,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         });
         btnLibraryTop.setVisibility(cfg.libraryButton && cfg.appLibrary ? View.VISIBLE : View.GONE);
         addTopBarApps(cfg.topBarApps, cfg.launchActions);
+        addBluetoothButton();
         iconOnlyButtons = cfg.iconOnlyButtons;
         topMenu = cfg.topMenu;
         wifiIconOnly = iconOnlyButtons && cfg.wifiLabelWidth <= 0;
@@ -814,6 +847,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         getWindow().getDecorView().getViewTreeObserver().addOnGlobalFocusChangeListener((oldF, newF) -> {
             boolean onTile = newF != null && newF.getId() == R.id.card;
             if (!onTile) hideGlass();
+            if (navSound != null && oldF != null && newF != null) navSound.focusMoved();
         });
 
         packageFilter.addAction(Intent.ACTION_PACKAGE_ADDED);
@@ -940,6 +974,14 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     @Override
     protected void onResume() {
         super.onResume();
+        // The quick settings panel's language button: rebuild Home in the other language.
+        if (localeRevision != LauncherLocale.revision) {
+            localeRevision = LauncherLocale.revision;
+            recreate();
+            return;
+        }
+        if (headerExtras != null) headerExtras.onResume();
+        if (navSound != null) navSound.muteSystemTick();
         // A festival that started or ended while Home was in the background: rebuild with or without it.
         if (festive != festival.active(LocalDate.now())) {
             recreate();
@@ -1151,6 +1193,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     @Override
     protected void onPause() {
         super.onPause();
+        if (navSound != null) navSound.restoreSystemTick();
         root.removeCallbacks(showIdleClock);
         endReorder();   // Home or another app while reordering keeps the order so far
         wallpaperPlayer.stop();
@@ -1213,6 +1256,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        if (navSound != null) navSound.release();
         unregisterReceiver(packageReceiver);
         wallpaperPlayer.close();
         ConnectivityManager cm = getSystemService(ConnectivityManager.class);
@@ -1256,6 +1300,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      */
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
+        if (navSound != null && event.getAction() == KeyEvent.ACTION_DOWN) {
+            int code = event.getKeyCode();
+            if (code >= KeyEvent.KEYCODE_DPAD_UP && code <= KeyEvent.KEYCODE_DPAD_RIGHT) navSound.keyPressed();
+        }
         // Vendor keys (TCL Netflix button, 4062) never reach the key services, only the focused window.
         if (event.getKeyCode() >= 1000 && RemoteKeys.handle(this, event, homeAppKeys.get(event.getKeyCode()), null)) return true;
         if (handleSettingsKey(event)) return true;
@@ -2277,8 +2325,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             target = Math.min(position + COLUMNS, count - 1);
         }
         focusTile(target);
-        // The default focus search clicks for Left/Right; Up/Down are handled here, so click for them too.
-        grid.playSoundEffect(keyCode == KeyEvent.KEYCODE_DPAD_UP
+        // The default focus search clicks for Left/Right; Up/Down are handled here, so click for them too. A theme's
+        // own sound plays from the focus listener instead.
+        if (navSound == null) grid.playSoundEffect(keyCode == KeyEvent.KEYCODE_DPAD_UP
                 ? SoundEffectConstants.NAVIGATION_UP : SoundEffectConstants.NAVIGATION_DOWN);
         return true;
     }
@@ -2363,6 +2412,29 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             bar.addView(button, bar.indexOfChild(getResources().getBoolean(R.bool.rtl_menu_bar) ? btnVpn : btnWifi));
             topAppButtons.add(button);
         }
+    }
+
+    /**
+     * A round Bluetooth button beside the network pill that opens the TV's "Remotes & Accessories" screen, or the
+     * nearest Bluetooth screen this app may start (QuickSettingsActivity.bluetoothTargets). Left out when none resolves.
+     */
+    private void addBluetoothButton() {
+        List<Intent> targets = QuickSettingsActivity.bluetoothTargets(this);
+        if (targets.isEmpty()) return;
+        ViewGroup bar = findViewById(R.id.topButtons);
+        TextView button = (TextView) getLayoutInflater().inflate(R.layout.top_app_button, bar, false);
+        button.setId(View.generateViewId());
+        button.setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_bluetooth, 0, 0, 0);
+        button.setContentDescription(getString(R.string.qs_bluetooth));
+        button.setOnClickListener(v -> {
+            if (!QuickSettingsActivity.startFirst(this, targets)) {
+                Toast.makeText(this, R.string.not_available, Toast.LENGTH_SHORT).show();
+            }
+        });
+        // Between the network pill and Settings; the Hebrew bar runs the other way.
+        int wifi = bar.indexOfChild(btnWifi);
+        bar.addView(button, getResources().getBoolean(R.bool.rtl_menu_bar) ? wifi : wifi + 1);
+        topAppButtons.add(button);
     }
 
     @Override public void onLibraryUp() {
@@ -2516,8 +2588,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             greeting.setText(festiveGreeting);
             greeting.setTextColor(liftTowardsWhite(festival.accentColor(), 0.25f));
         } else {
-            greeting.setText(greetingName.isEmpty() ? getString(res)
-                    : getString(R.string.greeting_with_name, getString(res), greetingName));
+            String name = headerExtras != null ? headerExtras.name(greetingName) : greetingName;
+            CharSequence text = name.isEmpty() ? getString(res)
+                    : getString(R.string.greeting_with_name, getString(res), name);
+            greeting.setText(headerExtras != null ? headerExtras.withLocation(text, greeting) : text);
+            if (hebrewGreeting != null) greeting.post(hebrewGreeting);
             greeting.setTextColor(greetingColor);
         }
         if (shamsi) shamsiDate.setText(Shamsi.today(getResources()));

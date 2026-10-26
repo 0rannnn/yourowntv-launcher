@@ -79,6 +79,12 @@ Invoke-Tv tv.py --push $config "$tmp-config.json" | Out-Null
 Invoke-Tv tv.py (Put 'config.json')
 $wall = Join-Path $Theme 'wallpaper.jpg'
 if (Test-Path $wall) { Invoke-Tv b64push.py $wall "$tmp-wallpaper.jpg"; Invoke-Tv tv.py (Put 'wallpaper.jpg') } else { Invoke-Tv tv.py (Drop 'wallpaper.jpg') | Out-Null }
+# Optional typeface for Home's clock (HeaderExtras); a theme without one takes the last one off.
+$font = Join-Path $Theme 'clock_font.ttf'
+if (Test-Path $font) { Invoke-Tv b64push.py $font "$tmp-clock_font.ttf"; Invoke-Tv tv.py (Put 'clock_font.ttf') } else { Invoke-Tv tv.py (Drop 'clock_font.ttf') | Out-Null }
+# Optional navigation sound for Home (NavSound), the same way.
+$sound = Join-Path $Theme 'nav_sound.wav'
+if (Test-Path $sound) { Invoke-Tv b64push.py $sound "$tmp-nav_sound.wav"; Invoke-Tv tv.py (Put 'nav_sound.wav') } else { Invoke-Tv tv.py (Drop 'nav_sound.wav') | Out-Null }
 Invoke-Tv tv.py $clearWallpapers | Out-Null
 foreach ($image in $images) {
     Invoke-Tv b64push.py $image.FullName (Stage "wallpapers/$($image.Name)")

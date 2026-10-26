@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Weather: thunderstorm. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="36dp" android:height="36dp"
+    android:viewportWidth="48" android:viewportHeight="48">
+    <path android:fillColor="#FF9AA6B8"
+        android:pathData="M12,30h22a8,8 0,0 0,1.2 -15.9A11,11 0,0 0,14.4 12.6,9 9,0 0,0 12,30z" />
+    <path android:fillColor="#FFFFD23F" android:pathData="M25,28l-7,10h5l-2,8 9,-12h-5.5l2.5,-6z" />
+</vector>

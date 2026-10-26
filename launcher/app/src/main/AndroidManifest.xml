@@ -9,6 +9,11 @@
 
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <!-- Only to open the TV's "Pair remote or accessory" screen from the top bar's Bluetooth button, which
+         Settings guards with this permission; granted over ADB (pm grant). -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <!-- Only for the header's weather (HeaderExtras): Open-Meteo, with weather_lat/weather_lon in the theme. -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <!-- Needed since Android 10 to read the Wi-Fi network name for the network pill. Never requested at
          runtime: build-and-install grants it with pm grant, so lint's Android 12 "ask for COARSE with
          FINE" rule does not apply here. -->
@@ -31,6 +36,22 @@
         </intent>
         <intent>
             <action android:name="android.settings.WIFI_SETTINGS" />
+        </intent>
+        <!-- Quick settings: Spotify's media library service and media button receiver, to resume playback. -->
+        <package android:name="com.spotify.tv.android" />
+        <!-- Quick settings: the projector's manual keystone screen (Fengmi / Formovie). -->
+        <intent>
+            <action android:name="com.fengmi.projector.imaging.action.START_KEYSTONE" />
+        </intent>
+        <!-- The top bar's Bluetooth button. -->
+        <intent>
+            <action android:name="android.settings.SLICE_SETTINGS" />
+        </intent>
+        <intent>
+            <action android:name="com.google.android.intent.action.CONNECT_INPUT" />
+        </intent>
+        <intent>
+            <action android:name="android.settings.BLUETOOTH_SETTINGS" />
         </intent>
         <intent>
             <action android:name="android.settings.DISPLAY_SETTINGS" />

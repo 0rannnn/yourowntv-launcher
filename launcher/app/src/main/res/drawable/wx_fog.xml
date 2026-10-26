@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Weather: fog. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="36dp" android:height="36dp"
+    android:viewportWidth="48" android:viewportHeight="48">
+    <path android:fillColor="#FFDCE3EE"
+        android:pathData="M12,26h22a8,8 0,0 0,1.2 -15.9A11,11 0,0 0,14.4 8.6,9 9,0 0,0 12,26z" />
+    <path android:fillColor="#B3DCE3EE" android:pathData="M8,31h32v3H8z" />
+    <path android:fillColor="#80DCE3EE" android:pathData="M12,37h26v3H12z" />
+</vector>

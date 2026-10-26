@@ -22,9 +22,23 @@ final class LauncherLocale {
         return Locale.forLanguageTag(tag.trim());
     }
 
+    private static final String PREFS = "launcher_language";
+    /** Bumped by set(), so an activity built in the old language knows to rebuild. */
+    static int revision;
+
+    /**
+     * The language button in the quick settings panel: a tag ("iw", "en") that wins over the theme's locale, kept in
+     * the launcher's own storage so it outlives theme pushes; "" goes back to the theme's or the TV's language.
+     */
+    static void set(Context context, String tag) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("tag", tag).commit();
+        revision++;
+    }
+
     /** base with the configured language, or base itself when locale is off. */
     static Context wrap(Context base) {
-        Locale locale = parse(Config.load(base).locale);
+        String chosen = base.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("tag", "");
+        Locale locale = parse(chosen != null && !chosen.isEmpty() ? chosen : Config.load(base).locale);
         if (locale == null) return base;
         // Formatters that take no Context (the clock's date, the lunar line) follow the default locale.
         Locale.setDefault(locale);

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="qs_screensaver">שומר מסך</string>
+    <string name="qs_bluetooth">בלוטות\'</string>
+    <string name="qs_sound">צליל</string>
+    <string name="qs_accessibility">נגישות</string>
+    <string name="qs_keystone">תיקון טרפז</string>
+    <string name="qs_launcher">מסך הבית</string>
+    <string name="qs_bt_devices">מכשירי בלוטות\'</string>
+    <string name="qs_connected">מחובר</string>
+    <string name="qs_not_connected">לא מחובר</string>
+    <string name="qs_resume">המשך ניגון</string>
+    <string name="qs_previous">הקודם</string>
+    <string name="qs_play_pause">נגן או השהה</string>
+    <string name="qs_next">הבא</string>
+    <string name="qs_language">שפה</string>
+</resources>

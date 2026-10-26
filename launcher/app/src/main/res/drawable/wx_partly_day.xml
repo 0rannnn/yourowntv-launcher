@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Weather: partly cloudy, day. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="36dp" android:height="36dp"
+    android:viewportWidth="48" android:viewportHeight="48">
+    <path android:fillColor="#FFFFC94A"
+        android:pathData="M19,5l2,4.6 4.7,-1.7 -0.7,5 5,-0.7 -1.7,4.7L33,19l-4.6,2 1.7,4.7 -5,-0.7 0.7,5 -4.7,-1.7L19,33l-2,-4.6 -4.7,1.7 0.7,-5 -5,0.7 1.7,-4.7L5,19l4.6,-2 -1.7,-4.7 5,0.7 -0.7,-5 4.7,1.7z" />
+    <path android:fillColor="#FFFFB020" android:pathData="M19,12a7,7 0,1 0,0.01 0z" />
+    <path android:fillColor="#FFF2F5FA"
+        android:pathData="M18,42h20a7,7 0,0 0,1 -13.9A9.5,9.5 0,0 0,20.6 27,7.5 7.5,0 0,0 18,42z" />
+</vector>
