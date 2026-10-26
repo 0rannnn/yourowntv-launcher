@@ -25,7 +25,11 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
+import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
+import android.view.ViewGroup;
+import android.view.animation.AccelerateInterpolator;
+import android.view.animation.DecelerateInterpolator;
 import android.view.KeyEvent;
 import android.view.View;
 import android.widget.FrameLayout;
@@ -65,6 +69,8 @@ public final class QuickSettingsActivity extends Activity {
     private static boolean focusLanguage;
     /** This panel is being rebuilt by the language button, not left: onPause must not close it. */
     private boolean relaunching;
+    /** Back was pressed and the exit animation is running. */
+    private boolean closing;
 
     private BluetoothAdapter adapter;
     private final Map<Integer, BluetoothProfile> proxies = new HashMap<>();
@@ -88,7 +94,11 @@ public final class QuickSettingsActivity extends Activity {
             position.setMarginEnd(0);
             position.setMargins(inset, position.topMargin, 0, position.bottomMargin);
             panel.setLayoutParams(position);
+            findViewById(R.id.scrim).setBackground(new GradientDrawable(GradientDrawable.Orientation.RIGHT_LEFT,
+                    new int[] {getColor(R.color.scrim_far), 0x40000000, getColor(R.color.scrim_edge)}));
         }
+        // Slide in from the panel's own edge, unless this is the panel rebuilding itself in the other language.
+        boolean entering = !focusLanguage;
         findViewById(R.id.scrim).setOnClickListener(v -> finish());
         View gear = findViewById(R.id.qsGear);
         gear.setOnClickListener(v -> open(listOf(SystemSettings.intent(this, Settings.ACTION_SETTINGS))));
@@ -143,6 +153,59 @@ public final class QuickSettingsActivity extends Activity {
             language.requestFocus();
         } else {
             tiles.getChildAt(0).requestFocus();
+        }
+        addFocusMotion(findViewById(R.id.panel));
+        if (entering) animatePanel(true, null);
+    }
+
+    /** Back: the panel slides out the way it came in, then closes. */
+    @Override
+    public void onBackPressed() {
+        if (closing) return;
+        closing = true;
+        animatePanel(false, this::finish);
+    }
+
+    /**
+     * The panel's entrance and exit: a short slide from its edge with a fade, the backdrop fading with it. Transform
+     * and alpha only, so the TV composites it without redrawing the glass.
+     */
+    private void animatePanel(boolean in, Runnable done) {
+        View panel = findViewById(R.id.panel);
+        View scrim = findViewById(R.id.scrim);
+        float offset = dp(40) * (getResources().getBoolean(R.bool.rtl_menu_bar) ? -1 : 1);
+        int duration = getResources().getInteger(R.integer.motion_panel_ms);
+        if (in) {
+            panel.setAlpha(0f);
+            panel.setTranslationX(offset);
+            scrim.setAlpha(0f);
+        }
+        scrim.animate().alpha(in ? 1f : 0f).setDuration(duration).start();
+        panel.animate().alpha(in ? 1f : 0f).translationX(in ? 0f : offset)
+                .setDuration(in ? duration : duration * 2 / 3)
+                .setInterpolator(in ? new DecelerateInterpolator(2.2f) : new AccelerateInterpolator(1.6f))
+                .withEndAction(done).start();
+    }
+
+    /** Every focusable control in the panel grows slightly while focused, as tvOS controls lift. */
+    private void addFocusMotion(View view) {
+        if (view.isFocusable()) {
+            float tileScale = getResources().getInteger(R.integer.focus_scale_percent) / 100f;
+            int duration = getResources().getInteger(R.integer.motion_fast_ms);
+            // A full-width row (Resume, a paired device) grows half as much, so it stays inside the glass.
+            view.setOnFocusChangeListener((v, focused) -> {
+                float scale = v.getWidth() > dp(200) ? 1f + (tileScale - 1f) / 2f : tileScale;
+                v.animate().scaleX(focused ? scale : 1f).scaleY(focused ? scale : 1f)
+                        .setDuration(duration).setInterpolator(new DecelerateInterpolator()).start();
+            });
+            if (view.isFocused()) {
+                view.setScaleX(tileScale);
+                view.setScaleY(tileScale);
+            }
+        }
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) addFocusMotion(group.getChildAt(i));
         }
     }
 
@@ -301,6 +364,7 @@ public final class QuickSettingsActivity extends Activity {
      * One row per paired device with whether it is connected. A row opens that device's page in TV Settings,
      * where Connect or Disconnect is the first item: apps cannot connect a device themselves.
      */
+    @android.annotation.SuppressLint("MissingPermission")   // BLUETOOTH_CONNECT is granted over ADB; every call catches SecurityException
     private void addPairedDevices(GridLayout tiles) {
         BluetoothManager manager = getSystemService(BluetoothManager.class);
         adapter = manager != null ? manager.getAdapter() : null;
@@ -326,6 +390,7 @@ public final class QuickSettingsActivity extends Activity {
                             + device.getAddress());
             View row = addTile(tiles, R.drawable.ic_bluetooth, name, getString(R.string.qs_not_connected),
                     listOf(page), 2);
+            row.findViewById(R.id.icon).setAlpha(0.45f);
             deviceRows.put(device.getAddress(), row);
         }
         // Connection state comes from each profile: A2DP for speakers and earbuds, HID for remotes and
@@ -359,17 +424,21 @@ public final class QuickSettingsActivity extends Activity {
 
     private void markConnected(String address) {
         View row = deviceRows.get(address);
-        if (row != null) runOnUiThread(() -> ((TextView) row.findViewById(R.id.status)).setText(R.string.qs_connected));
+        if (row != null) runOnUiThread(() -> {
+            ((TextView) row.findViewById(R.id.status)).setText(R.string.qs_connected);
+            row.findViewById(R.id.icon).setAlpha(1f);
+        });
     }
 
     private void addSection(GridLayout tiles, String title) {
         TextView label = new TextView(this);
         label.setText(title);
-        label.setTextColor(0xB3FFFFFF);
-        label.setTextSize(12);
+        label.setTextColor(getColor(R.color.text_tertiary));
+        label.setTextSize(11);
         label.setAllCaps(true);
-        label.setLetterSpacing(0.08f);
-        label.setPadding(dp(8), dp(14), dp(8), dp(2));
+        label.setLetterSpacing(0.14f);
+        label.setTypeface(getResources().getFont(R.font.outfit_medium));
+        label.setPadding(dp(10), dp(18), dp(10), dp(4));
         GridLayout.LayoutParams lp = new GridLayout.LayoutParams(
                 GridLayout.spec(GridLayout.UNDEFINED), GridLayout.spec(0, 2));
         tiles.addView(label, lp);

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Behind the quick settings panel: the picture darkens towards the panel's edge, so the glass reads against any
+     wallpaper or app. A gradient, not a blur. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <gradient android:angle="0" android:startColor="@color/scrim_far" android:centerColor="#40000000"
+        android:centerX="0.55" android:endColor="@color/scrim_edge" />
+</shape>

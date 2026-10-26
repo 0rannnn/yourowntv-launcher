@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One design system for Home and the quick settings panel: dark frosted glass over a cinematic wallpaper,
+     white focus, three text levels and a small set of corner radii. Drawables and layouts read these, so the
+     two screens stay in step. -->
+<resources>
+    <!-- Glass surfaces: a cool dark tint, lighter at the top like light falling on frosted glass. -->
+    <!-- Opaque enough that Home's tiles and buttons do not ghost through, translucent enough to keep the colour. -->
+    <color name="glass_top">#EB1D1E25</color>
+    <color name="glass_bottom">#F2111218</color>
+    <color name="glass_edge">#2EFFFFFF</color>
+    <color name="glass_highlight">#1FFFFFFF</color>
+    <!-- Controls on glass. -->
+    <color name="control_fill">#1AFFFFFF</color>
+    <color name="control_fill_top">#26FFFFFF</color>
+    <color name="control_edge">#1FFFFFFF</color>
+    <color name="control_disabled">#0AFFFFFF</color>
+    <color name="focus_fill">#F7FFFFFF</color>
+    <!-- Text: primary on glass, secondary for supporting lines, tertiary for labels and hints. -->
+    <color name="text_primary">#F2FFFFFF</color>
+    <color name="text_secondary">#A6FFFFFF</color>
+    <color name="text_tertiary">#73FFFFFF</color>
+    <color name="text_on_focus">#FF101014</color>
+    <!-- The dim behind a floating panel, strongest at the panel's edge. -->
+    <color name="scrim_edge">#99000000</color>
+    <color name="scrim_far">#00000000</color>
+
+    <dimen name="radius_panel">30dp</dimen>
+    <dimen name="radius_control">20dp</dimen>
+    <dimen name="radius_pill">21dp</dimen>
+    <!-- How much a focused control grows, in percent. -->
+    <integer name="focus_scale_percent">104</integer>
+    <integer name="motion_fast_ms">160</integer>
+    <integer name="motion_panel_ms">240</integer>
+</resources>

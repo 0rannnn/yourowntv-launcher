@@ -14,6 +14,8 @@
      true for a right-to-left language (`values-iw`).
    - `fonts.xml`: point `font_body`, `font_regular` and the other `font_*` at the system families when the
      bundled Outfit has no glyphs for the language's letters (`values-vi`, #833).
+   - `strings_quick.xml`: the quick settings panel's tile names (Screensaver, Bluetooth, Sound, Keystone,
+     Spotify controls, the language button), for a language that wants them translated (`values-iw`).
    - `lunar.xml`: the lunar date format, the leap-month wording and the stem and branch names, for a
      language that names them itself (`values-zh-rCN`, `values-vi`). Keep `lunar_stems` at ten items and
      `lunar_branches` at twelve: `Lunar.java` indexes both by position, so a short list crashes the

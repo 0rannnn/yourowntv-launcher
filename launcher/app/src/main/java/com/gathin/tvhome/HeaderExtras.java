@@ -197,11 +197,12 @@ final class HeaderExtras {
         box.setGravity(Gravity.CENTER_VERTICAL);
         box.setVisibility(View.GONE);
         weatherIcon = new ImageView(activity);
-        int iconSize = Math.round(34 * density);
+        // Secondary to the clock: smaller, and in the design system's secondary white.
+        int iconSize = Math.round(28 * density);
         box.addView(weatherIcon, new LinearLayout.LayoutParams(iconSize, iconSize));
         weatherTemp = new TextView(activity);
-        weatherTemp.setTextColor(0xF2FFFFFF);
-        weatherTemp.setTextSize(TypedValue.COMPLEX_UNIT_SP, 30);
+        weatherTemp.setTextColor(activity.getColor(R.color.text_primary));
+        weatherTemp.setTextSize(TypedValue.COMPLEX_UNIT_SP, 24);
         weatherTemp.setTypeface(activity.getResources().getFont(R.font.outfit_light));
         weatherTemp.setIncludeFontPadding(false);
         LinearLayout.LayoutParams tempLp = new LinearLayout.LayoutParams(
@@ -212,7 +213,7 @@ final class HeaderExtras {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         lp.gravity = Gravity.BOTTOM;
-        lp.bottomMargin = Math.round(6 * density);
+        lp.bottomMargin = Math.round(10 * density);
         lp.leftMargin = Math.round(18 * density);
         lp.rightMargin = Math.round(4 * density);
         int dividerAt = row.indexOfChild(divider);
