@@ -392,9 +392,40 @@ final class Config {
         return GLASS_HALO.equalsIgnoreCase(v) ? GLASS_HALO : GLASS_DEFAULT;
     }
 
-    /** The folder the theme tools push into; null when external storage is unavailable. */
+    /** Where themes kept side by side live, one folder each, under {@link #baseDir}: themes/reel, themes/classic... */
+    static final String THEMES = "themes";
+
+    /**
+     * The theme in use: the one picked in the quick panel (themes/NAME, when it has a config.json), else the folder
+     * the theme tools push into. Null when external storage is unavailable.
+     */
     static File dir(Context ctx) {
+        File base = baseDir(ctx);
+        String picked = HomeToggles.theme(ctx);
+        if (base != null && !picked.isEmpty()) {
+            File slot = new File(new File(base, THEMES), picked);
+            if (new File(slot, FILE_NAME).isFile()) return slot;
+        }
+        return base;
+    }
+
+    /** The folder the theme tools push into; null when external storage is unavailable. */
+    static File baseDir(Context ctx) {
         return ctx.getExternalFilesDir(null);
+    }
+
+    /** The themes kept on the TV to pick from (folders under themes/ with a config.json), by name. */
+    static List<String> themes(Context ctx) {
+        File base = baseDir(ctx);
+        File[] slots = base == null ? null : new File(base, THEMES).listFiles(File::isDirectory);
+        List<String> names = new ArrayList<>();
+        if (slots != null) {
+            for (File slot : slots) {
+                if (ThemeFiles.slotName(slot.getName()) && new File(slot, FILE_NAME).isFile()) names.add(slot.getName());
+            }
+        }
+        Collections.sort(names);
+        return names;
     }
 
     static Config load(Context ctx) {

@@ -22,4 +22,7 @@
     <string name="qs_off">כבוי</string>
     <string name="qs_glass">שקיפות</string>
     <string name="qs_reorder">סידור</string>
+    <string name="qs_background">רקע</string>
+    <string name="qs_rotate">מתחלף</string>
+    <string name="qs_theme">ערכת נושא</string>
 </resources>

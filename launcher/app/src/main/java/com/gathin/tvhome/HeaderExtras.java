@@ -121,9 +121,19 @@ final class HeaderExtras {
     }
 
     private void applyClockFont(TextView clock) {
+        applyClockFont(activity, clock, fontWeight);
+    }
+
+    /** The theme's clock_font.ttf at clock_font_weight, for the screensavers' clocks too. */
+    static void applyClockFont(Context ctx, TextView clock) {
+        JSONObject json = readConfig(ctx);
+        applyClockFont(ctx, clock, json != null ? json.optInt("clock_font_weight", 0) : 0);
+    }
+
+    private static void applyClockFont(Context ctx, TextView clock, int fontWeight) {
         // The clocks keep their own typeface in Hebrew too (HebrewFont).
         clock.setTag(HebrewFont.KEEP);
-        File dir = Config.dir(activity);
+        File dir = Config.dir(ctx);
         File font = dir != null ? new File(dir, CLOCK_FONT) : null;
         if (font != null && font.isFile() && font.length() > 0) {
             try {
@@ -241,7 +251,7 @@ final class HeaderExtras {
     }
 
     /** The centred clock's digits drawn twice: a translucent fill, then a thin brighter edge over it. */
-    private static final class GlassClock extends TextClock {
+    static final class GlassClock extends TextClock {
         private Shader fill;
         private Shader edge;
         private float edgeWidth;
@@ -321,8 +331,12 @@ final class HeaderExtras {
      */
     private void applyGlass() {
         if (glassClock == null) return;
-        int level = HomeToggles.glass(activity);
-        float density = activity.getResources().getDisplayMetrics().density;
+        applyGlass(glassClock, HomeToggles.glass(activity), activity.getResources().getDisplayMetrics().density,
+                glassTop, glassBottom);
+    }
+
+    /** The glass for a level of the slider, its shading running down the digits from glassTop to glassBottom. */
+    static void applyGlass(GlassClock glassClock, int level, float density, float glassTop, float glassBottom) {
         glassClock.setGlass(new LinearGradient(0, glassTop, 0, glassBottom,
                         white(HomeToggles.mix(0xF0, 0x66, level)), white(HomeToggles.mix(0xC0, 0x30, level)),
                         Shader.TileMode.CLAMP),
@@ -444,7 +458,7 @@ final class HeaderExtras {
         return box;
     }
 
-    private static JSONObject readConfig(Context ctx) {
+    static JSONObject readConfig(Context ctx) {
         File dir = Config.dir(ctx);
         File file = dir != null ? new File(dir, Config.FILE_NAME) : null;
         if (file == null || !file.isFile()) return null;

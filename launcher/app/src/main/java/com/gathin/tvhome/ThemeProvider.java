@@ -18,12 +18,14 @@ import java.io.FileNotFoundException;
  *   content write --uri content://com.gathin.tvhome.theme/wallpapers/dusk.jpg < /data/local/tmp/dusk.jpg
  *   content delete --uri content://com.gathin.tvhome.theme/config.json
  *   content delete --uri content://com.gathin.tvhome.theme/wallpapers      (every image in the collection)
+ *   content write --uri content://com.gathin.tvhome.theme/themes/classic/config.json < ...   (a theme kept
+ *                                                     side by side, for the quick panel's theme picker)
  */
 public class ThemeProvider extends ContentProvider {
 
     private File file(Uri uri) throws FileNotFoundException {
         String path = ThemeFiles.path(uri.getPathSegments());
-        File dir = Config.dir(getContext());
+        File dir = Config.baseDir(getContext());
         if (dir == null || path == null) throw new FileNotFoundException(String.valueOf(uri));
         File f = new File(dir, path);
         File parent = f.getParentFile();
@@ -43,9 +45,10 @@ public class ThemeProvider extends ContentProvider {
 
     @Override
     public int delete(Uri uri, String selection, String[] selectionArgs) {
-        File dir = Config.dir(getContext());
-        if (dir != null && ThemeFiles.isCollection(uri.getPathSegments())) {
-            File[] images = new File(dir, ThemeFiles.WALLPAPERS).listFiles((d, name) -> ThemeFiles.collectionImage(name));
+        File dir = Config.baseDir(getContext());
+        String collection = ThemeFiles.collection(uri.getPathSegments());
+        if (dir != null && collection != null) {
+            File[] images = new File(dir, collection).listFiles((d, name) -> ThemeFiles.collectionImage(name));
             int n = 0;
             if (images != null) for (File f : images) if (f.delete()) n++;
             return n;

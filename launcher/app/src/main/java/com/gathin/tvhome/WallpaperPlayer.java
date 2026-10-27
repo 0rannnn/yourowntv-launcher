@@ -311,6 +311,11 @@ final class WallpaperPlayer {
      * kept; null when the picture has none or it cannot be read.
      */
     private Bitmap decodeForeground(File wallpaper) {
+        return decodeForeground(wallpaper, width, height);
+    }
+
+    /** decodeForeground for a screen of screenW x screenH; the Reel screensaver's too. */
+    static Bitmap decodeForeground(File wallpaper, int screenW, int screenH) {
         File file = WallpaperRotation.foregroundOf(wallpaper);
         if (!file.isFile()) return null;
         try {
@@ -319,10 +324,10 @@ final class WallpaperPlayer {
             BitmapFactory.decodeFile(file.getPath(), options);
             int width = options.outWidth, height = options.outHeight;
             if (width <= 0 || height <= 0) return null;
-            int sample = WallpaperSize.sampleSize(width, height, this.width, this.height);
+            int sample = WallpaperSize.sampleSize(width, height, screenW, screenH);
             options.inJustDecodeBounds = false;
             options.inSampleSize = sample;
-            int[] scale = WallpaperSize.coverScale(width / sample, height / sample, this.width, this.height);
+            int[] scale = WallpaperSize.coverScale(width / sample, height / sample, screenW, screenH);
             if (scale != null) {
                 options.inScaled = true;
                 options.inDensity = scale[0];
@@ -341,17 +346,22 @@ final class WallpaperPlayer {
     }
 
     private Bitmap decode(File file) {
+        return decode(file, width, height, bitmapConfig, dimColor);
+    }
+
+    /** A picture covering a screen of screenW x screenH, with dimColor painted in, as a hardware bitmap. */
+    static Bitmap decode(File file, int screenW, int screenH, Bitmap.Config bitmapConfig, int dimColor) {
         try {
             BitmapFactory.Options options = new BitmapFactory.Options();
             options.inJustDecodeBounds = true;
             BitmapFactory.decodeFile(file.getPath(), options);
             int width = options.outWidth, height = options.outHeight;
             if (width <= 0 || height <= 0) return null;
-            int sample = WallpaperSize.sampleSize(width, height, this.width, this.height);
+            int sample = WallpaperSize.sampleSize(width, height, screenW, screenH);
             if (!WallpaperSize.accepted(width / sample, height / sample)) return null;
             options.inJustDecodeBounds = false;
             options.inSampleSize = sample;
-            int[] scale = WallpaperSize.coverScale(width / sample, height / sample, this.width, this.height);
+            int[] scale = WallpaperSize.coverScale(width / sample, height / sample, screenW, screenH);
             if (scale != null) {
                 options.inScaled = true;
                 options.inDensity = scale[0];

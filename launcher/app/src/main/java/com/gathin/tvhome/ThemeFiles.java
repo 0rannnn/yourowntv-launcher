@@ -12,8 +12,36 @@ final class ThemeFiles {
 
     private ThemeFiles() {}
 
-    /** The path relative to the theme directory, e.g. "config.json" or "wallpapers/dusk.jpg", or null if refused. */
+    /** A theme kept side by side: themes/NAME, with NAME of letters, digits, _ and -. */
+    private static final Pattern SLOT = Pattern.compile("[A-Za-z0-9_-]{1,32}");
+
+    static boolean slotName(String name) {
+        return name != null && SLOT.matcher(name).matches();
+    }
+
+    /**
+     * The path relative to {@link Config#baseDir}, e.g. "config.json", "wallpapers/dusk.jpg" or, for a theme kept
+     * side by side, "themes/classic/config.json"; null if refused.
+     */
     static String path(List<String> segments) {
+        if (segments != null && segments.size() > 2 && Config.THEMES.equals(segments.get(0)) && slotName(segments.get(1))) {
+            String inner = themePath(segments.subList(2, segments.size()));
+            return inner == null ? null : Config.THEMES + "/" + segments.get(1) + "/" + inner;
+        }
+        return themePath(segments);
+    }
+
+    /** "wallpapers" alone, or under themes/NAME: the collection folder a delete empties; null for anything else. */
+    static String collection(List<String> segments) {
+        if (isCollection(segments)) return WALLPAPERS;
+        if (segments != null && segments.size() == 3 && Config.THEMES.equals(segments.get(0)) && slotName(segments.get(1))
+                && WALLPAPERS.equals(segments.get(2))) {
+            return Config.THEMES + "/" + segments.get(1) + "/" + WALLPAPERS;
+        }
+        return null;
+    }
+
+    private static String themePath(List<String> segments) {
         if (segments == null) return null;
         if (segments.size() == 1) {
             String name = segments.get(0);

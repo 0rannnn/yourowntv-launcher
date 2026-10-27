@@ -204,11 +204,24 @@ final class RecentRow {
 
         int scale = activity.getResources().getInteger(R.integer.focus_scale_percent);
         int ms = activity.getResources().getInteger(R.integer.motion_fast_ms);
+        // Focused, the card turns solid white with dark text, as the quick panel's focus does: a brighter rim alone
+        // was hard to see over a photo.
+        int glassAlpha = glass.getAlpha();
         card.setOnFocusChangeListener((v, focused) -> {
             float s = focused ? scale / 100f + 0.02f : 1f;
             v.animate().scaleX(s).scaleY(s).setDuration(ms).start();
-            glass.setStroke(Math.max(1, Math.round((focused ? 2 : 1) * density)),
+            if (focused) {
+                int white = activity.getColor(R.color.focus_fill);
+                glass.setColors(new int[] {white, white});
+                glass.setAlpha(255);
+            } else {
+                glass.setColors(new int[] {activity.getColor(R.color.glass_top), activity.getColor(R.color.glass_bottom)});
+                glass.setAlpha(glassAlpha);
+            }
+            glass.setStroke(Math.max(1, Math.round(density)),
                     focused ? activity.getColor(R.color.focus_fill) : activity.getColor(R.color.glass_edge));
+            name.setTextColor(activity.getColor(focused ? R.color.text_on_focus : R.color.text_primary));
+            ago.setTextColor(focused ? 0xB3101014 : activity.getColor(R.color.text_secondary));
         });
         card.setOnKeyListener((v, keyCode, event) -> {
             if (event.getAction() != android.view.KeyEvent.ACTION_DOWN) return false;

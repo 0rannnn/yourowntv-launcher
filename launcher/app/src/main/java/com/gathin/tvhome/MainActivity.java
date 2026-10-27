@@ -3353,8 +3353,25 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         panel.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
         popup.setWidth(Math.max(width, Math.min(panel.getMeasuredWidth(), (int) (360 * density))));
 
-        int alignment = getResources().getBoolean(R.bool.rtl_menu_bar) != underGear ? Gravity.END : Gravity.START;
-        dropIn(popup, panel, anchor, alignment);
+        LinearLayout bar = findViewById(R.id.topButtons);
+        if (!underGear && bar.getOrientation() == LinearLayout.VERTICAL) {
+            // center_clock's stacked corner: the list opens beside Inputs, level with it, towards the middle of the
+            // screen (left of it in the right corner, right of it in Hebrew's left corner), so it never covers the
+            // 2 x 2 grid of buttons under it.
+            int[] at = new int[2];
+            anchor.getLocationInWindow(at);
+            boolean leftCorner = at[0] + anchor.getWidth() / 2 < root.getWidth() / 2;
+            int gap = Math.round(12 * density);
+            panel.setAlpha(0f);
+            panel.setTranslationX((leftCorner ? -8 : 8) * density);
+            popup.showAtLocation(root, Gravity.TOP | Gravity.LEFT,
+                    leftCorner ? at[0] + anchor.getWidth() + gap : at[0] - popup.getWidth() - gap, at[1]);
+            panel.animate().alpha(1f).translationX(0f).setDuration(reducedMotion ? Motion.REDUCED_MS : 220)
+                    .setInterpolator(new android.view.animation.DecelerateInterpolator(1.6f)).start();
+        } else {
+            int alignment = getResources().getBoolean(R.bool.rtl_menu_bar) != underGear ? Gravity.END : Gravity.START;
+            dropIn(popup, panel, anchor, alignment);
+        }
         rows.getChildAt(0).requestFocus();
     }
 

@@ -1,14 +1,21 @@
 package com.gathin.tvhome;
 
+import android.content.Context;
 import android.service.dreams.DreamService;
 
 /**
- * Screensaver: the launcher's thin clock and date on black, over a slow ambient glow (ClockScene).
- * No network, no images: cheap enough for a 1 GB TV.
+ * Screensaver, in the theme's style (DreamScene): the Reel photo with the glass clock behind its cut-out, or the
+ * launcher's thin clock and date drifting over a slow ambient glow or Home's picture (ClockScene).
+ * No network, no video: cheap enough for a 1 GB TV.
  */
 public class ClockDream extends DreamService {
 
-    private ClockScene scene;
+    private DreamScene scene;
+
+    @Override
+    protected void attachBaseContext(Context base) {
+        super.attachBaseContext(LauncherLocale.wrap(base));   // the launcher's language, as on Home
+    }
 
     @Override
     public void onAttachedToWindow() {
@@ -16,9 +23,7 @@ public class ClockDream extends DreamService {
         setInteractive(false);   // any key wakes the TV back to where it was
         setFullscreen(true);
         setScreenBright(false);
-        setContentView(R.layout.dream_clock);
-        scene = new ClockScene(getWindow().getDecorView());
-        scene.useHomeWallpaper(this);
+        scene = DreamScene.create(this, this::setContentView);
     }
 
     @Override

@@ -3,11 +3,15 @@
 #
 # Usage: tools\theme.ps1 -TvHost 192.168.1.50 themes\aurora
 #        tools\theme.ps1 -TvHost 192.168.1.50 -Reset
+#        tools\theme.ps1 -TvHost 192.168.1.50 -Slot classic themes\aurora   (kept as themes/classic, for the
+#                                                    quick panel's theme picker; the theme in use is left alone)
 param(
     [Parameter(Position = 0)][string]$Theme,
     [switch]$Reset,
+    [string]$Slot,
     [string]$TvHost = $env:TV_HOST
 )
+if ($Slot -and $Slot -notmatch '^[A-Za-z0-9_-]{1,32}$') { throw "unsupported slot name: $Slot" }
 $ErrorActionPreference = 'Stop'
 $OutputEncoding = New-Object System.Text.UTF8Encoding $false
 if (-not $TvHost) { throw 'pass -TvHost <tv ip> or set $env:TV_HOST' }
@@ -37,6 +41,7 @@ $revision = [guid]::NewGuid().ToString('N')
 # A provider write creates the file as the launcher, and it cannot truncate a file the shell owns either, so
 # remove our copy first. cp stays as the fallback for firmware without the provider.
 $uri = "content://$pkg.theme"
+if ($Slot) { $dir = "$dir/themes/$Slot"; $uri = "$uri/themes/$Slot" }
 $tmp = '/data/local/tmp/cyt-theme'
 # A file's staging path; wallpapers/a.jpg is staged as $tmp-wallpapers-a.jpg.
 function Stage($name) { "$tmp-$($name -replace '/', '-')" }

@@ -84,6 +84,8 @@ public final class QuickSettingsActivity extends Activity {
 
     /** vision_panel: the centred visionOS cards instead of the right-edge panel. */
     private boolean vision;
+    /** The Background and Theme pickers, shown in place of the panel. */
+    private PanelPicker picker;
     /** Spotify's session the now-playing card follows, and the tick that moves its progress bar. */
     private MediaController following;
     private MediaController.Callback followCallback;
@@ -161,6 +163,19 @@ public final class QuickSettingsActivity extends Activity {
             addTile(tiles, R.drawable.ic_swap_vert, getString(R.string.qs_reorder), null,
                     listOf(new Intent(this, MainActivity.class).setAction(MainActivity.ACTION_REORDER)));
         }
+        // The pickers: one of the theme's photos held on Home, and the themes kept on the TV. A pick closes the
+        // panel; Home rebuilds with it as it comes back in front.
+        picker = new PanelPicker(this, findViewById(R.id.scrim), findViewById(R.id.panel));
+        if (!PanelPicker.wallpapers(this, () -> { }).isEmpty()) {
+            View background = addTile(tiles, R.drawable.ic_wallpaper, getString(R.string.qs_background), null, null);
+            background.setOnClickListener(v -> picker.show(getString(R.string.qs_background),
+                    PanelPicker.wallpapers(this, this::closeAfterPick)));
+        }
+        if (!PanelPicker.themes(this, () -> { }).isEmpty()) {
+            View theme = addTile(tiles, R.drawable.ic_theme, getString(R.string.qs_theme), null, null);
+            theme.setOnClickListener(v -> picker.show(getString(R.string.qs_theme),
+                    PanelPicker.themes(this, this::closeAfterPick)));
+        }
         // Home's own switches: the clock behind the landscape or in front of it, and the navigation sound.
         if (HeaderExtras.themeFlag(this, "center_clock")) {
             addSwitch(tiles, R.drawable.ic_depth, R.drawable.ic_depth, R.string.qs_clock_depth,
@@ -218,6 +233,18 @@ public final class QuickSettingsActivity extends Activity {
         slider.setProgress(HomeToggles.glass(this));
         applyCardGlass(slider.getProgress());
         value.setText(slider.getProgress() + "%");
+        if (HebrewFont.hebrew(this)) {
+            // Hebrew fills from the right. The launcher has no RTL layout, so the bar is mirrored and Left and
+            // Right swapped by hand: Left (towards the far end) still adds.
+            slider.setScaleX(-1f);
+            slider.setOnKeyListener((v, keyCode, event) -> {
+                if (keyCode != KeyEvent.KEYCODE_DPAD_LEFT && keyCode != KeyEvent.KEYCODE_DPAD_RIGHT) return false;
+                if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                    slider.incrementProgressBy(keyCode == KeyEvent.KEYCODE_DPAD_LEFT ? 10 : -10);
+                }
+                return true;
+            });
+        }
         slider.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(android.widget.SeekBar bar, int level, boolean fromUser) {
@@ -332,9 +359,19 @@ public final class QuickSettingsActivity extends Activity {
         for (View child : children) group.addView(child);
     }
 
-    /** Back: the panel slides out the way it came in, then closes. */
+    /** A picker's choice is made: the whole panel goes, so Home shows it. */
+    private void closeAfterPick() {
+        picker.close();
+        onBackPressed();
+    }
+
+    /** Back: a picker returns to the panel; the panel slides out the way it came in, then closes. */
     @Override
     public void onBackPressed() {
+        if (picker != null && picker.isOpen()) {
+            picker.close();
+            return;
+        }
         if (closing) return;
         closing = true;
         animatePanel(false, this::finish);
@@ -379,7 +416,8 @@ public final class QuickSettingsActivity extends Activity {
 
     /** Every focusable control in the panel grows slightly while focused, as tvOS controls lift. */
     private void addFocusMotion(View view) {
-        if (view.isFocusable()) {
+        // The glass slider shows focus with its ring and keeps its own scale (mirrored in Hebrew).
+        if (view.isFocusable() && !(view instanceof android.widget.SeekBar)) {
             float tileScale = getResources().getInteger(R.integer.focus_scale_percent) / 100f;
             int duration = getResources().getInteger(R.integer.motion_fast_ms);
             // A full-width row (Resume, a paired device) grows half as much, so it stays inside the glass.

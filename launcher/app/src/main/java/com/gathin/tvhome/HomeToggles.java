@@ -12,6 +12,7 @@ final class HomeToggles {
     private static final String CLOCK_BEHIND = "clock_behind";
     private static final String NAV_MUTED = "nav_muted";
     private static final String GLASS = "glass";
+    private static final String THEME = "theme";
 
     private HomeToggles() {
     }
@@ -40,6 +41,16 @@ final class HomeToggles {
 
     static void setGlass(Context ctx, int level) {
         prefs(ctx).edit().putInt(GLASS, Math.max(0, Math.min(100, level))).apply();
+    }
+
+    /** The theme picked in the quick panel (a folder name under themes/), or "" for the one the tools pushed. */
+    static String theme(Context ctx) {
+        return prefs(ctx).getString(THEME, "");
+    }
+
+    /** commit, not apply: Home restarts right after and must read the new choice. */
+    static void setTheme(Context ctx, String name) {
+        prefs(ctx).edit().putString(THEME, name).commit();
     }
 
     /**
