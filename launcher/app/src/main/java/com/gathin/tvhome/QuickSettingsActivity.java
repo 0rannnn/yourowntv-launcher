@@ -149,7 +149,8 @@ public final class QuickSettingsActivity extends Activity {
                 listOf(SystemSettings.intent(this, Settings.ACTION_DISPLAY_SETTINGS)));
         // Fengmi / Formovie projectors: the manual keystone screen (Quick Adjustment, Fine Tuning, Reset).
         Intent keystone = new Intent(KEYSTONE_ACTION);
-        if (getPackageManager().resolveActivity(keystone, 0) != null) {
+        if (hasKeystone == null) hasKeystone = getPackageManager().resolveActivity(keystone, 0) != null;
+        if (hasKeystone) {
             addTile(tiles, R.drawable.ic_keystone, getString(R.string.qs_keystone), null, listOf(keystone));
         }
         addTile(tiles, R.drawable.ic_accessibility, getString(R.string.qs_accessibility), null,
@@ -166,12 +167,12 @@ public final class QuickSettingsActivity extends Activity {
         // The pickers: one of the theme's photos held on Home, and the themes kept on the TV. A pick closes the
         // panel; Home rebuilds with it as it comes back in front.
         picker = new PanelPicker(this, findViewById(R.id.scrim), findViewById(R.id.panel));
-        if (!PanelPicker.wallpapers(this, () -> { }).isEmpty()) {
+        if (PanelPicker.hasWallpapers(this)) {
             View background = addTile(tiles, R.drawable.ic_wallpaper, getString(R.string.qs_background), null, null);
             background.setOnClickListener(v -> picker.show(getString(R.string.qs_background),
                     PanelPicker.wallpapers(this, this::closeAfterPick)));
         }
-        if (!PanelPicker.themes(this, () -> { }).isEmpty()) {
+        if (Config.themes(this).size() >= 2) {
             View theme = addTile(tiles, R.drawable.ic_theme, getString(R.string.qs_theme), null, null);
             theme.setOnClickListener(v -> picker.show(getString(R.string.qs_theme),
                     PanelPicker.themes(this, this::closeAfterPick)));
@@ -385,12 +386,13 @@ public final class QuickSettingsActivity extends Activity {
         View panel = findViewById(R.id.panel);
         View scrim = findViewById(R.id.scrim);
         if (vision) {
-            // The cards rise out of the dim, a little smaller at first, as visionOS windows open.
-            int duration = getResources().getInteger(R.integer.motion_panel_ms);
+            // The cards rise out of the dim, a little smaller at first, as visionOS windows open. Quicker in than the
+            // usual panel motion, and from partly visible, so the press shows at once.
+            int duration = in ? 170 : getResources().getInteger(R.integer.motion_panel_ms);
             if (in) {
-                panel.setAlpha(0f);
-                panel.setScaleX(0.94f);
-                panel.setScaleY(0.94f);
+                panel.setAlpha(0.3f);
+                panel.setScaleX(0.96f);
+                panel.setScaleY(0.96f);
                 scrim.setAlpha(0f);
             }
             scrim.animate().alpha(in ? 1f : 0f).setDuration(duration).start();
@@ -790,7 +792,14 @@ public final class QuickSettingsActivity extends Activity {
             deviceRows.put(device.getAddress(), row);
         }
         // Connection state comes from each profile: A2DP for speakers and earbuds, HID for remotes and
-        // keyboards, headset and LE audio for the rest. The proxies answer asynchronously.
+        // keyboards, headset and LE audio for the rest. The proxies answer asynchronously; they are asked once the
+        // panel is on screen, since binding four of them held up its first frame.
+        afterFirstFrame(() -> watchConnections(manager));
+    }
+
+    @android.annotation.SuppressLint("MissingPermission")
+    private void watchConnections(BluetoothManager manager) {
+        if (isFinishing()) return;
         for (int profile : PROFILES) {
             try {
                 adapter.getProfileProxy(this, new BluetoothProfile.ServiceListener() {
@@ -816,6 +825,19 @@ public final class QuickSettingsActivity extends Activity {
             for (BluetoothDevice d : manager.getConnectedDevices(BluetoothProfile.GATT)) markConnected(d.getAddress());
         } catch (RuntimeException ignored) {
         }
+    }
+
+    /** Runs {@code work} just after the panel's first frame is drawn. */
+    private void afterFirstFrame(Runnable work) {
+        View decor = getWindow().getDecorView();
+        decor.getViewTreeObserver().addOnPreDrawListener(new android.view.ViewTreeObserver.OnPreDrawListener() {
+            @Override
+            public boolean onPreDraw() {
+                decor.getViewTreeObserver().removeOnPreDrawListener(this);
+                decor.post(work);
+                return true;
+            }
+        });
     }
 
     private void markConnected(String address) {
@@ -872,6 +894,8 @@ public final class QuickSettingsActivity extends Activity {
      * Bluetooth settings: those that resolve, in that order. Both permissions are granted over ADB.
      */
     static List<Intent> bluetoothTargets(Context context) {
+        // Resolved once per process: three package lookups on every open of the panel added up.
+        if (bluetoothTargets != null) return bluetoothTargets;
         PackageManager pm = context.getPackageManager();
         List<Intent> targets = new ArrayList<>();
         for (Intent candidate : new Intent[] {
@@ -881,8 +905,13 @@ public final class QuickSettingsActivity extends Activity {
                 new Intent(Settings.ACTION_BLUETOOTH_SETTINGS)}) {
             if (pm.resolveActivity(candidate, 0) != null) targets.add(candidate);
         }
+        bluetoothTargets = targets;
         return targets;
     }
+
+    private static List<Intent> bluetoothTargets;
+    /** Whether this projector has the keystone screen, looked up once per process. */
+    private static Boolean hasKeystone;
 
     /** Starts the first of {@code targets} this app may start; false when none could be. */
     static boolean startFirst(Context context, List<Intent> targets) {

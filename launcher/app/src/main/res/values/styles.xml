@@ -6,6 +6,12 @@
         <item name="android:windowAnimationStyle">@null</item>
     </style>
 
+    <!-- The quick panel: see-through over what is playing, with no window animation of its own, since the panel
+         animates itself in (QuickSettingsActivity.animatePanel); the two ran one after the other. -->
+    <style name="Theme.QuickPanel" parent="@android:style/Theme.Translucent.NoTitleBar.Fullscreen">
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
+
     <!-- Frosted pill, tvOS style. -->
     <style name="TopButtonBase">
         <item name="android:layout_width">wrap_content</item>

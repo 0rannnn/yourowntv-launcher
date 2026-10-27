@@ -13,7 +13,25 @@ import android.provider.Settings;
 final class SystemSettings {
     private SystemSettings() {}
 
+    /** What each action resolved to, for the life of the process: the quick panel asks for six on every open. */
+    private static final java.util.Map<String, Intent> resolved = new java.util.HashMap<>();
+
+    /** A copy each time: callers add flags to it. */
     static Intent intent(Context context, String action) {
+        Intent known;
+        synchronized (resolved) {
+            known = resolved.get(action);
+        }
+        if (known == null) {
+            known = resolve(context, action);
+            synchronized (resolved) {
+                resolved.put(action, known);
+            }
+        }
+        return new Intent(known);
+    }
+
+    private static Intent resolve(Context context, String action) {
         PackageManager pm = context.getPackageManager();
         Intent standard = new Intent(action);
         ResolveInfo resolved = pm.resolveActivity(standard, PackageManager.MATCH_DEFAULT_ONLY);

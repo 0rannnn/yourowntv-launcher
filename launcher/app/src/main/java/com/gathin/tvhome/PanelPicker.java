@@ -262,6 +262,12 @@ final class PanelPicker {
 
     // ---- What the pickers list ------------------------------------------------------------------------
 
+    /** Whether the theme in use has a collection to pick from: the panel shows Background only then. */
+    static boolean hasWallpapers(Activity activity) {
+        File dir = Config.dir(activity);
+        return WallpaperRotation.images(dir == null ? null : new File(dir, ThemeFiles.WALLPAPERS)).size() >= 2;
+    }
+
     /** Rotate, then every photo of the theme in use; picking one holds it on Home (Config.WALLPAPER_CHOICE_KEY). */
     static List<Option> wallpapers(Activity activity, Runnable done) {
         List<Option> options = new ArrayList<>();
