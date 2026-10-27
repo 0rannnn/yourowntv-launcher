@@ -128,6 +128,7 @@ final class WallpaperPlayer {
             if (bitmap != null) {
                 show(bitmap);
                 showForeground(decodeForeground(first));
+                shown(first);
                 // The picture covers the whole screen: the root's plain colour under it is overdraw.
                 root.setBackground(null);
                 displayed = first.getName();
@@ -214,6 +215,7 @@ final class WallpaperPlayer {
                 }
                 show(bitmap);
                 showForeground(cutOut);
+                shown(next);
                 displayed = next.getName();
                 showCaption(true);
                 if (!displayed.equals(previous) || changed == 0) {
@@ -288,6 +290,59 @@ final class WallpaperPlayer {
         root.setBackground(null);
         image.setImageBitmap(bitmap);
         if (old != null && old != bitmap) image.postDelayed(old::recycle, 500);
+    }
+
+    /**
+     * How much the glass clock should firm up over each picture, 0 to 1, by its path: worked out as it is decoded.
+     * A dark picture showed through the clock's translucent white as flat grey, and a busy one (the Golden Gate's
+     * tower and cables) as clutter inside the digits; over those the clock turns more solid.
+     */
+    private static final java.util.Map<String, Float> SOLIDITY = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** The picture's solidity, 0 when it has not been decoded. */
+    static float solidity(File picture) {
+        Float value = picture == null ? null : SOLIDITY.get(picture.getPath());
+        return value == null ? 0f : value;
+    }
+
+    /**
+     * Brightness and its spread over the band the centred clock covers (prepare.py's CLOCK_BOX), from a coarse grid
+     * of samples: dark makes it solid, and so does a busy band, a little less.
+     */
+    static float clockBandSolidity(Bitmap bitmap) {
+        int w = bitmap.getWidth(), h = bitmap.getHeight();
+        int cols = 24, rows = 10, n = 0;
+        float sum = 0, sumSq = 0;
+        for (int r = 0; r < rows; r++) {
+            int y = Math.min(h - 1, Math.round(h * (0.12f + 0.30f * (r + 0.5f) / rows)));
+            for (int c = 0; c < cols; c++) {
+                int x = Math.min(w - 1, Math.round(w * (0.27f + 0.46f * (c + 0.5f) / cols)));
+                int p = bitmap.getPixel(x, y);
+                float l = (0.2126f * ((p >> 16) & 0xFF) + 0.7152f * ((p >> 8) & 0xFF) + 0.0722f * (p & 0xFF)) / 255f;
+                sum += l;
+                sumSq += l * l;
+                n++;
+            }
+        }
+        float mean = sum / n;
+        float spread = (float) Math.sqrt(Math.max(0, sumSq / n - mean * mean));
+        float dark = Math.max(0, Math.min(1, (0.45f - mean) / 0.30f));
+        float busy = Math.max(0, Math.min(1, (spread - 0.10f) / 0.15f));
+        return Math.max(dark, 0.8f * busy);
+    }
+
+    /** Tells HeaderExtras each picture's solidity as it comes on screen, and the current one at once. */
+    void setOnShown(java.util.function.Consumer<Float> listener) {
+        onShown = listener;
+        if (shownFile != null) listener.accept(solidity(shownFile));
+    }
+
+    private java.util.function.Consumer<Float> onShown;
+    private File shownFile;
+
+    private void shown(File picture) {
+        shownFile = picture;
+        if (onShown != null) onShown.accept(solidity(picture));
     }
 
     /** Tag of the cut-out view in the root, for HeaderExtras to slide the centred clock under it. */
@@ -372,6 +427,8 @@ final class WallpaperPlayer {
             Bitmap decoded = BitmapFactory.decodeFile(file.getPath(), options);
             if (decoded == null) return null;
             if (dimColor != 0) new Canvas(decoded).drawColor(dimColor);
+            // Read while the pixels are still readable: the hardware copy below cannot be.
+            SOLIDITY.put(file.getPath(), clockBandSolidity(decoded));
             // One copy in GPU memory instead of a software bitmap plus its texture; the decode stays off the UI
             // thread for rotations, and Home's return no longer uploads 4-8 MB to the GPU.
             Bitmap gpu = decoded.copy(Bitmap.Config.HARDWARE, false);

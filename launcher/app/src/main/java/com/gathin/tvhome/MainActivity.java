@@ -478,6 +478,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         localeRevision = LauncherLocale.revision;
         headerExtras = new HeaderExtras(this);
         headerExtras.attach(findViewById(R.id.clock));
+        // The glass clock firms up over a dark or busy photo, following the rotation.
+        wallpaperPlayer.setOnShown(headerExtras::photoSolidity);
         navSound = NavSound.load(this);
         clockBlock = findViewById(R.id.leftBlock);
         greetingColor = greeting.getCurrentTextColor();

@@ -332,13 +332,31 @@ final class HeaderExtras {
     private void applyGlass() {
         if (glassClock == null) return;
         applyGlass(glassClock, HomeToggles.glass(activity), activity.getResources().getDisplayMetrics().density,
-                glassTop, glassBottom);
+                glassTop, glassBottom, photoSolidity);
     }
 
-    /** The glass for a level of the slider, its shading running down the digits from glassTop to glassBottom. */
-    static void applyGlass(GlassClock glassClock, int level, float density, float glassTop, float glassBottom) {
+    /** The shown picture's solidity (WallpaperPlayer.solidity): the glass firms up over a dark or busy photo. */
+    private float photoSolidity;
+
+    void photoSolidity(float solidity) {
+        photoSolidity = solidity;
+        applyGlass();
+    }
+
+    /**
+     * The glass for a level of the slider, its shading running down the digits from glassTop to glassBottom. Over a
+     * dark or busy photo (solidity towards 1) the fill moves most of the way to near-solid white, so the digits stay
+     * white rather than grey and the photo behind them stops cluttering them; the rim is left as it is.
+     */
+    static void applyGlass(GlassClock glassClock, int level, float density, float glassTop, float glassBottom,
+                           float solidity) {
+        float firm = 0.75f * Math.max(0, Math.min(1, solidity));
+        int top = HomeToggles.mix(0xF0, 0x66, level);
+        int bottom = HomeToggles.mix(0xC0, 0x30, level);
+        top = Math.round(top + (0xFA - top) * firm);
+        bottom = Math.round(bottom + (0xF0 - bottom) * firm);
         glassClock.setGlass(new LinearGradient(0, glassTop, 0, glassBottom,
-                        white(HomeToggles.mix(0xF0, 0x66, level)), white(HomeToggles.mix(0xC0, 0x30, level)),
+                        white(top), white(bottom),
                         Shader.TileMode.CLAMP),
                 new LinearGradient(0, glassTop, 0, glassBottom,
                         white(HomeToggles.mix(0xFF, 0xE6, level)), white(HomeToggles.mix(0x80, 0x70, level)),

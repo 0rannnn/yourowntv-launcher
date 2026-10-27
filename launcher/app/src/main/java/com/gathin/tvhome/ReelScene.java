@@ -110,7 +110,10 @@ final class ReelScene implements DreamScene {
         paint.getTextBounds("0123456789", 0, 10, digits);
         float inset = -paint.getFontMetrics().ascent + digits.top;
         float glyphTop = CLOCK_TOP * height;
-        HeaderExtras.applyGlass(clock, HomeToggles.glass(ctx), density, inset, inset + digits.height());
+        this.clock = clock;
+        glassTop = inset;
+        glassBottom = inset + digits.height();
+        glass(0f);
         FrameLayout.LayoutParams clockLp = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
                 Gravity.TOP | Gravity.CENTER_HORIZONTAL);
@@ -136,6 +139,15 @@ final class ReelScene implements DreamScene {
 
     View view() {
         return root;
+    }
+
+    private HeaderExtras.GlassClock clock;
+    private float glassTop, glassBottom;
+
+    /** The glass for the slider's level, firmed up over a dark or busy photo as on Home. */
+    private void glass(float solidity) {
+        HeaderExtras.applyGlass(clock, HomeToggles.glass(ctx), ctx.getResources().getDisplayMetrics().density,
+                glassTop, glassBottom, solidity);
     }
 
     @Override
@@ -191,6 +203,7 @@ final class ReelScene implements DreamScene {
                     photo.setImageBitmap(picture);
                     cutOut.setImageBitmap(front);
                     shown = file;
+                    glass(WallpaperPlayer.solidity(file));
                     if (oldPhoto != null) photo.postDelayed(oldPhoto::recycle, 500);
                     if (oldCut != null) cutOut.postDelayed(oldCut::recycle, 500);
                     stage.animate().alpha(1f).setDuration(FADE_IN_MS).withLayer().start();
