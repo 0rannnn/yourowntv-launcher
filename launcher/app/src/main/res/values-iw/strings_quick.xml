@@ -24,5 +24,8 @@
     <string name="qs_reorder">סידור</string>
     <string name="qs_background">רקע</string>
     <string name="qs_rotate">מתחלף</string>
+    <string name="qs_rotating">רקע מתחלף</string>
+    <string name="qs_arrange">סידור החלונית</string>
+    <string name="qs_arrange_hint">אישור מרים כפתור, החצים מזיזים, אישור מניח</string>
     <string name="qs_theme">ערכת נושא</string>
 </resources>

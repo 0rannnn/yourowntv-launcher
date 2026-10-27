@@ -28,5 +28,8 @@
     <string name="qs_reorder">Reorder</string>
     <string name="qs_background">Background</string>
     <string name="qs_rotate">Rotate</string>
+    <string name="qs_rotating">Rotating background</string>
+    <string name="qs_arrange">Arrange the panel</string>
+    <string name="qs_arrange_hint">OK picks a button up, the arrows move it, OK sets it down</string>
     <string name="qs_theme">Theme</string>
 </resources>

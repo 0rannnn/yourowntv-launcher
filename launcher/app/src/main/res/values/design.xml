@@ -28,7 +28,10 @@
     <color name="vision_top">#F04E4E58</color>
     <color name="vision_bottom">#F23A3A43</color>
     <color name="vision_edge">#4DFFFFFF</color>
-    <color name="vision_control">#2EFFFFFF</color>
+    <!-- Round controls: a brighter frost, so they read white rather than grey. -->
+    <color name="vision_control">#47FFFFFF</color>
+    <!-- All text on the panel, second lines too: clear white. -->
+    <color name="vision_text">#FFFFFFFF</color>
     <color name="vision_on">#FF0A84FF</color>
     <color name="vision_scrim">#A6000000</color>
 

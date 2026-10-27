@@ -46,6 +46,14 @@ final class NavSound {
         File dir = Config.dir(context);
         File file = dir != null ? new File(dir, FILE) : null;
         if (file == null || !file.isFile() || file.length() == 0) return null;
+        // A new sound (the editor or a theme push replaced the file) is meant to be heard: it lifts the panel's mute.
+        String stamp = file.getPath() + ":" + file.length() + ":" + file.lastModified();
+        android.content.SharedPreferences prefs = context.getSharedPreferences(TAG, Context.MODE_PRIVATE);
+        String seen = prefs.getString("sound_stamp", null);
+        if (!stamp.equals(seen)) {
+            if (seen != null) HomeToggles.setNavMuted(context, false);
+            prefs.edit().putString("sound_stamp", stamp).apply();
+        }
         return new NavSound(context, file);
     }
 

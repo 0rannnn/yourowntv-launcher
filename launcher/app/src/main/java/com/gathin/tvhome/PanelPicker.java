@@ -277,7 +277,7 @@ final class PanelPicker {
         SharedPreferences choices = activity.getSharedPreferences(Config.SETTINGS_NAME, Activity.MODE_PRIVATE);
         String current = choices.getString(Config.WALLPAPER_CHOICE_KEY, null);
         boolean rotating = WallpaperRotation.find(images, current) == null;
-        options.add(new Option(activity.getString(R.string.qs_rotate), null, R.drawable.ic_swap_vert, rotating, () -> {
+        options.add(new Option(activity.getString(R.string.qs_rotate), null, R.drawable.ic_rotate, rotating, () -> {
             choose(choices, null);
             done.run();
         }));
@@ -300,6 +300,33 @@ final class PanelPicker {
             label.append(Character.toUpperCase(word.charAt(0))).append(word.substring(1));
         }
         return label.length() > 0 ? label.toString() : file;
+    }
+
+    /** Whether Home rotates its photos: no single photo held, or the one held is no longer in the collection. */
+    static boolean rotating(Activity activity) {
+        File dir = Config.dir(activity);
+        List<File> images = WallpaperRotation.images(dir == null ? null : new File(dir, ThemeFiles.WALLPAPERS));
+        String current = activity.getSharedPreferences(Config.SETTINGS_NAME, Activity.MODE_PRIVATE)
+                .getString(Config.WALLPAPER_CHOICE_KEY, null);
+        return WallpaperRotation.find(images, current) == null;
+    }
+
+    /**
+     * The panel's rotating-background switch: on goes back to the rotation, off holds the photo Home shows now
+     * (WallpaperPlayer records it), or the first one when none was recorded.
+     */
+    static void setRotating(Activity activity, boolean on) {
+        SharedPreferences choices = activity.getSharedPreferences(Config.SETTINGS_NAME, Activity.MODE_PRIVATE);
+        if (on) {
+            choose(choices, null);
+            return;
+        }
+        File dir = Config.dir(activity);
+        List<File> images = WallpaperRotation.images(dir == null ? null : new File(dir, ThemeFiles.WALLPAPERS));
+        if (images.isEmpty()) return;
+        String shown = activity.getSharedPreferences("wallpaper_rotation", Activity.MODE_PRIVATE).getString("image", "");
+        File hold = WallpaperRotation.find(images, shown);
+        choose(choices, (hold != null ? hold : images.get(0)).getName());
     }
 
     private static void choose(SharedPreferences choices, String name) {

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Second lines on the visionOS panel (a device's state, the artist, the language's name): clear white, not grey,
+     and dark on a focused white row. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_focused="true" android:color="#CC111111" />
+    <item android:color="@color/vision_text" />
+</selector>

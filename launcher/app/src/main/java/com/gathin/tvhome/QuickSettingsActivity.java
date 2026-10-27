@@ -137,6 +137,8 @@ public final class QuickSettingsActivity extends Activity {
         String[] network = network();
         View networkTile = addTile(tiles, network[0].equals(getString(R.string.ethernet)) ? R.drawable.ic_ethernet : R.drawable.ic_wifi,
                 network[0], network[1], listOf(SystemSettings.intent(this, Settings.ACTION_WIFI_SETTINGS)));
+        // Its icon is Wi-Fi or Ethernet: one key either way, for the arranged order.
+        networkTile.setTag(R.id.panel_key, "network");
         // On a visionOS toggle, blue means on: online, and Bluetooth switched on.
         networkTile.setActivated(!network[0].equals(getString(R.string.quick_network)));
         View bluetoothTile = addTile(tiles, R.drawable.ic_bluetooth, getString(R.string.qs_bluetooth), null, bluetoothTargets(this));
@@ -153,8 +155,6 @@ public final class QuickSettingsActivity extends Activity {
         if (hasKeystone) {
             addTile(tiles, R.drawable.ic_keystone, getString(R.string.qs_keystone), null, listOf(keystone));
         }
-        addTile(tiles, R.drawable.ic_accessibility, getString(R.string.qs_accessibility), null,
-                listOf(SystemSettings.intent(this, Settings.ACTION_ACCESSIBILITY_SETTINGS)));
         addTile(tiles, R.drawable.ic_apps, getString(R.string.quick_apps), getString(R.string.quick_apps_hint),
                 listOf(SystemSettings.intent(this, Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS)));
         // Through Home, so it rebuilds with the new choices when Launcher settings closes.
@@ -171,6 +171,9 @@ public final class QuickSettingsActivity extends Activity {
             View background = addTile(tiles, R.drawable.ic_wallpaper, getString(R.string.qs_background), null, null);
             background.setOnClickListener(v -> picker.show(getString(R.string.qs_background),
                     PanelPicker.wallpapers(this, this::closeAfterPick)));
+            // The rotation in one press: off holds the photo on screen now, on goes back to rotating.
+            addSwitch(tiles, R.drawable.ic_rotate, R.drawable.ic_rotate, R.string.qs_rotating,
+                    PanelPicker.rotating(this), on -> PanelPicker.setRotating(this, on));
         }
         if (Config.themes(this).size() >= 2) {
             View theme = addTile(tiles, R.drawable.ic_theme, getString(R.string.qs_theme), null, null);
@@ -203,6 +206,13 @@ public final class QuickSettingsActivity extends Activity {
             recreate();
         });
 
+        // The vision panel's tiles in the order last arranged (the arrange button beside the language).
+        if (vision) {
+            arrangeTiles(tiles);
+            View arrange = findViewById(R.id.qsArrange);
+            arrange.setOnClickListener(v -> setArranging(!arranging));
+            arrange.setNextFocusDownId(tiles.getChildAt(0).getId());
+        }
         // Up from the top row reaches the gear, Down from the gear and the language button the first tile.
         for (int i = 0; i < tiles.getColumnCount() && i < tiles.getChildCount(); i++) {
             tiles.getChildAt(i).setNextFocusUpId(R.id.qsGear);
@@ -286,6 +296,8 @@ public final class QuickSettingsActivity extends Activity {
     private void addSwitch(GridLayout tiles, int iconOn, int iconOff, int title, boolean on,
                            java.util.function.Consumer<Boolean> store) {
         View tile = addTile(tiles, on ? iconOn : iconOff, getString(title), getString(on ? R.string.qs_on : R.string.qs_off), null);
+        // One key whether it starts on or off (the sound switch shows another icon while off).
+        tile.setTag(R.id.panel_key, getResources().getResourceEntryName(iconOn));
         tile.setActivated(on);
         tile.setOnClickListener(v -> {
             boolean now = !v.isActivated();
@@ -360,6 +372,121 @@ public final class QuickSettingsActivity extends Activity {
         for (View child : children) group.addView(child);
     }
 
+    // ---- arranging the panel's own tiles -------------------------------------------------------------------
+
+    /** The vision panel's tiles in their order; the grid is laid out from this. */
+    private final List<View> panelTiles = new ArrayList<>();
+    /** The arrange button is on: OK lifts a tile, the arrows move it, OK sets it down. */
+    private boolean arranging;
+    /** The tile lifted while arranging, or null. */
+    private View held;
+
+    private static String key(View tile) {
+        Object key = tile.getTag(R.id.panel_key);
+        return key != null ? key.toString() : "";
+    }
+
+    /** Puts the tiles in the saved order; tiles new since then keep their place after the saved ones. */
+    private void arrangeTiles(GridLayout tiles) {
+        panelTiles.clear();
+        for (int i = 0; i < tiles.getChildCount(); i++) panelTiles.add(tiles.getChildAt(i));
+        List<String> saved = HomeToggles.panelOrder(this);
+        if (!saved.isEmpty()) {
+            // A stable sort: tiles the saved order does not name stay in their own order at the end.
+            panelTiles.sort(java.util.Comparator.comparingInt(t -> {
+                int at = saved.indexOf(key(t));
+                return at < 0 ? Integer.MAX_VALUE : at;
+            }));
+        }
+        placeTiles(tiles);
+        for (View tile : panelTiles) tile.setOnKeyListener(this::arrangeKey);
+    }
+
+    /** Lays the grid out from panelTiles, row by row, each row from the right in Hebrew (as addVisionTile does). */
+    private void placeTiles(GridLayout tiles) {
+        tiles.removeAllViews();
+        int columns = tiles.getColumnCount();
+        boolean hebrew = HebrewFont.hebrew(this);
+        for (int i = 0; i < panelTiles.size(); i++) {
+            View tile = panelTiles.get(i);
+            int column = i % columns;
+            if (hebrew) column = columns - 1 - column;
+            GridLayout.LayoutParams lp = new GridLayout.LayoutParams(
+                    GridLayout.spec(i / columns), GridLayout.spec(column, 1f));
+            lp.width = 0;
+            lp.setMargins(dp(2), dp(4), dp(2), dp(4));
+            tiles.addView(tile, lp);
+            tile.setNextFocusUpId(i < columns ? R.id.qsGear : View.NO_ID);
+        }
+    }
+
+    private void setArranging(boolean on) {
+        if (!on && held != null) setDown();
+        arranging = on;
+        findViewById(R.id.qsArrange).setActivated(on);
+        for (View tile : panelTiles) tile.animate().alpha(on ? 0.7f : 1f).setDuration(150).start();
+        if (on) {
+            Toast.makeText(this, R.string.qs_arrange_hint, Toast.LENGTH_LONG).show();
+            panelTiles.get(0).requestFocus();
+        } else {
+            List<String> keys = new ArrayList<>();
+            for (View tile : panelTiles) keys.add(key(tile));
+            HomeToggles.setPanelOrder(this, keys);
+        }
+    }
+
+    /** While arranging: OK lifts or sets down the focused tile; with one lifted, the arrows carry it. */
+    private boolean arrangeKey(View tile, int keyCode, KeyEvent event) {
+        if (!arranging) return false;
+        if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
+            // Both halves of the press are taken, so the tile does not also open its screen.
+            if (event.getAction() == KeyEvent.ACTION_UP) {
+                if (held == tile) setDown();
+                else pickUp(tile);
+            }
+            return true;
+        }
+        if (held == null) return false;   // nothing lifted: the arrows move the focus as usual
+        boolean hebrew = HebrewFont.hebrew(this);
+        int columns = ((GridLayout) findViewById(R.id.tiles)).getColumnCount();
+        int at = panelTiles.indexOf(held), to;
+        switch (keyCode) {
+            case KeyEvent.KEYCODE_DPAD_LEFT: to = at + (hebrew ? 1 : -1); break;
+            case KeyEvent.KEYCODE_DPAD_RIGHT: to = at + (hebrew ? -1 : 1); break;
+            case KeyEvent.KEYCODE_DPAD_UP: to = at - columns; break;
+            case KeyEvent.KEYCODE_DPAD_DOWN: to = at + columns; break;
+            default: return false;
+        }
+        if (event.getAction() != KeyEvent.ACTION_DOWN || to < 0 || to >= panelTiles.size()) return true;
+        View moving = held;
+        panelTiles.remove(at);
+        panelTiles.add(to, moving);
+        placeTiles(findViewById(R.id.tiles));
+        moving.requestFocus();
+        lift(moving);
+        return true;
+    }
+
+    private void pickUp(View tile) {
+        if (held != null) setDown();
+        held = tile;
+        lift(tile);
+    }
+
+    private void lift(View tile) {
+        tile.animate().cancel();
+        tile.setAlpha(1f);
+        tile.animate().scaleX(1.2f).scaleY(1.2f).setDuration(120).start();
+    }
+
+    private void setDown() {
+        View tile = held;
+        held = null;
+        float focused = getResources().getInteger(R.integer.focus_scale_percent) / 100f;
+        float scale = tile.isFocused() ? focused : 1f;
+        tile.animate().scaleX(scale).scaleY(scale).alpha(arranging ? 0.7f : 1f).setDuration(120).start();
+    }
+
     /** A picker's choice is made: the whole panel goes, so Home shows it. */
     private void closeAfterPick() {
         picker.close();
@@ -371,6 +498,10 @@ public final class QuickSettingsActivity extends Activity {
     public void onBackPressed() {
         if (picker != null && picker.isOpen()) {
             picker.close();
+            return;
+        }
+        if (arranging) {
+            setArranging(false);
             return;
         }
         if (closing) return;
@@ -631,7 +762,7 @@ public final class QuickSettingsActivity extends Activity {
         lines.setOrientation(LinearLayout.VERTICAL);
         lines.setDuplicateParentStateEnabled(true);
         TextView title = mediaText(15, R.drawable.pill_text, R.font.outfit_medium);
-        TextView artist = mediaText(12, R.drawable.pill_text_dim, R.font.outfit_regular);
+        TextView artist = mediaText(12, R.drawable.vision_text_dim, R.font.outfit_regular);
         lines.addView(title);
         lines.addView(artist);
         LinearLayout.LayoutParams linesLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
@@ -965,6 +1096,8 @@ public final class QuickSettingsActivity extends Activity {
         View tile = getLayoutInflater().inflate(span == 2 ? R.layout.item_vision_row : R.layout.item_vision_toggle,
                 span == 2 ? list : tiles, false);
         tile.setId(View.generateViewId());
+        // Named by its icon for the arranged order: the same tile keeps its place in either language.
+        tile.setTag(R.id.panel_key, getResources().getResourceEntryName(icon));
         ((ImageView) tile.findViewById(R.id.icon)).setImageResource(icon);
         ((TextView) tile.findViewById(R.id.title)).setText(title);
         if (status != null && !status.isEmpty()) {

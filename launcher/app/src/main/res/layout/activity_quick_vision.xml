@@ -36,7 +36,7 @@
                 android:layout_height="wrap_content"
                 android:format12Hour="EEEE, MMMM d"
                 android:format24Hour="EEEE, MMMM d"
-                android:textColor="@color/text_secondary"
+                android:textColor="@color/vision_text"
                 android:textSize="13sp"
                 android:fontFamily="@string/font_medium" />
 
@@ -108,11 +108,25 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="8dp"
-                        android:textColor="@drawable/pill_text_dim"
+                        android:textColor="@drawable/vision_text_dim"
                         android:duplicateParentState="true"
                         android:textSize="13sp"
                         android:fontFamily="@string/font_regular" />
                 </LinearLayout>
+
+                <!-- Arrange: OK lifts a tile, the arrows move it, OK sets it down; pressed again (or Back), done. -->
+                <ImageView
+                    android:id="@+id/qsArrange"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_marginStart="8dp"
+                    android:padding="10dp"
+                    android:src="@drawable/ic_arrange"
+                    android:tint="@drawable/pill_text"
+                    android:background="@drawable/vision_toggle_bg"
+                    android:focusable="true"
+                    android:clickable="true"
+                    android:contentDescription="@string/qs_arrange" />
 
                 <View
                     android:layout_width="0dp"
@@ -190,7 +204,7 @@
                     android:focusable="true"
                     android:background="@drawable/vision_slider_bg"
                     android:progressTint="@color/text_primary"
-                    android:progressBackgroundTint="#66FFFFFF"
+                    android:progressBackgroundTint="#99FFFFFF"
                     android:thumbTint="@color/text_primary" />
 
                 <TextView
@@ -198,7 +212,7 @@
                     android:layout_width="42dp"
                     android:layout_height="wrap_content"
                     android:gravity="center"
-                    android:textColor="@color/text_secondary"
+                    android:textColor="@color/vision_text"
                     android:textSize="12sp"
                     android:fontFamily="@string/font_medium" />
             </LinearLayout>
@@ -221,7 +235,7 @@
                 android:layout_marginStart="4dp"
                 android:layout_marginBottom="4dp"
                 android:text="@string/qs_bt_devices"
-                android:textColor="@color/text_secondary"
+                android:textColor="@color/vision_text"
                 android:textSize="13sp"
                 android:fontFamily="@string/font_medium" />
 

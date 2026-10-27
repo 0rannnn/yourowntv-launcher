@@ -13,6 +13,17 @@ final class HomeToggles {
     private static final String NAV_MUTED = "nav_muted";
     private static final String GLASS = "glass";
     private static final String THEME = "theme";
+    private static final String PANEL_ORDER = "panel_order";
+
+    /** The quick panel's tiles in the order arranged there, by key; empty for the panel's own order. */
+    static java.util.List<String> panelOrder(Context ctx) {
+        String saved = prefs(ctx).getString(PANEL_ORDER, "");
+        return saved.isEmpty() ? java.util.Collections.emptyList() : java.util.Arrays.asList(saved.split(","));
+    }
+
+    static void setPanelOrder(Context ctx, java.util.List<String> keys) {
+        prefs(ctx).edit().putString(PANEL_ORDER, String.join(",", keys)).apply();
+    }
 
     private HomeToggles() {
     }
