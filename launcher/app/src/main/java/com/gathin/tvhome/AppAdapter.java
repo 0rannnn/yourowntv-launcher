@@ -64,7 +64,12 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
     }
 
     static final class Entry {
-        static final int APP = 0, HOME_SETTINGS = 1, CARD = 2, EMPTY = 3;
+        static final int APP = 0, HOME_SETTINGS = 1, CARD = 2, EMPTY = 3, PANEL = 4, LIBRARY = 5;
+
+        /** A tile of the launcher's own at the end of the row, never moved: Default home, ⚙ or "…". */
+        boolean fixed() {
+            return kind == HOME_SETTINGS || kind == PANEL || kind == LIBRARY;
+        }
 
         final int kind;
         final String label;
@@ -121,6 +126,8 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
      * MainActivity before the grid is built, so the static size helpers and the adapter agree.
      */
     static boolean square;
+    /** The theme's dock_extras: ⚙ (the quick panel) and "…" (the App library) at the end of the row; set as square. */
+    static boolean dockExtras;
     /** A square tile's side (dp). */
     static final float SQUARE_DP = 92f;
 
@@ -236,7 +243,8 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         this.animations = cfg.animations;
         this.advancedEffects = cfg.animations && cfg.advancedEffects;
         this.showHomeSettings = cfg.showHomeSettingsShortcut;
-        this.showLibrary = LibraryApps.showPill(cfg.appLibrary, cfg.libraryButton, cfg.showLibraryPill);
+        // dock_extras' "…" tile stands in for the pill.
+        this.showLibrary = !dockExtras && LibraryApps.showPill(cfg.appLibrary, cfg.libraryButton, cfg.showLibraryPill);
         this.reducedMotion = cfg.reducedMotion;
         this.focusOvershoot = cfg.focusOvershoot;
         this.rowsBelowDock = cfg.rowsBelowDock;
@@ -333,6 +341,15 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             fresh.add(new Entry(Entry.HOME_SETTINGS, ctx.getString(R.string.home_settings),
                     new ComponentName(ctx, HomeSettingsActivity.class), null,
                     ctx.getDrawable(R.drawable.ic_home_settings), null, 0));
+        }
+        // dock_extras: ⚙ for the quick panel and "…" for every app (the App library) close the row, as on tvOS.
+        if (dockExtras) {
+            fresh.add(new Entry(Entry.PANEL, ctx.getString(R.string.tv_settings),
+                    new ComponentName(ctx, QuickSettingsActivity.class), null,
+                    mark(R.drawable.ic_settings), null, 0));
+            fresh.add(new Entry(Entry.LIBRARY, ctx.getString(R.string.app_library),
+                    new ComponentName(ctx, MainActivity.class), null,
+                    mark(R.drawable.ic_more), null, 0));
         }
         docked = 0;
         while (docked < fresh.size() && isDocked(fresh.get(docked))) docked++;
@@ -497,6 +514,18 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             h.label.setVisibility(uniformTiles ? View.GONE : View.VISIBLE);
         }
         h.card.setOnClickListener(v -> launch(e));
+        if (e.kind == Entry.PANEL || e.kind == Entry.LIBRARY) {
+            // Plain glass with the white mark, not a fill sampled from the icon; nothing to hold OK for.
+            GradientDrawable glass = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                    new int[] {ctx.getColor(R.color.glass_top), ctx.getColor(R.color.glass_bottom)});
+            // The card's outline clips the corners (cornerRadius).
+            glass.setStroke(Math.max(1, Math.round(ctx.getResources().getDisplayMetrics().density)),
+                    ctx.getColor(R.color.glass_edge));
+            glass.setAlpha(HomeToggles.surfaceAlpha(HomeToggles.glass(ctx)));
+            h.card.setBackground(glass);
+            h.card.setOnLongClickListener(v -> true);
+            return;
+        }
         h.card.setOnLongClickListener(v -> {
             if (tileMenu) {
                 int pos = h.getBindingAdapterPosition();
@@ -513,11 +542,24 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         });
     }
 
+    /** A dock_extras mark, inset so it sits at a third of the tile like a glyph rather than filling it as app icons do. */
+    private Drawable mark(int res) {
+        return new android.graphics.drawable.InsetDrawable(ctx.getDrawable(res), 0.2f);
+    }
+
     /** Opens the tile's activity by explicit component, with no extras: a card can name nothing else. */
     private void launch(Entry e) {
         if (e.kind == Entry.HOME_SETTINGS) {
             ctx.startActivity(new Intent(ctx, HomeSettingsActivity.class)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            return;
+        }
+        if (e.kind == Entry.PANEL) {
+            ctx.startActivity(new Intent(ctx, QuickSettingsActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            return;
+        }
+        if (e.kind == Entry.LIBRARY) {
+            listener.onLibraryRequested();
             return;
         }
         Intent i = new Intent(Intent.ACTION_MAIN)
@@ -594,7 +636,8 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
     /** Tiles that can be moved: everything but the "Default home" tile, which always stays last. */
     int movableCount() {
         int n = items.size();
-        return n > 0 && items.get(n - 1).kind == Entry.HOME_SETTINGS ? n - 1 : n;
+        while (n > 0 && items.get(n - 1).fixed()) n--;
+        return n;
     }
 
     /** Keys of the movable tiles in their current order, for Order (empty dock slots are not tiles). */

@@ -403,6 +403,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         // config.xml, overlaid by config.json from a pushed theme (see Config and tools/theme.sh).
         Config cfg = Config.load(this);
         AppAdapter.square = HeaderExtras.themeFlag(this, "square_tiles");
+        AppAdapter.dockExtras = HeaderExtras.themeFlag(this, "dock_extras");
         homeAppKeys = RemoteKeys.parseAppKeys(cfg.appKeys);
         appLibrarySelection = cfg.appLibrarySelection;
         libraryOkOpens = cfg.libraryOkOpens;
@@ -1407,8 +1408,49 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         }
         if (!beginReorder()) return;
         focusTile(Math.max(0, Math.min(lastFocused, adapter.movableCount() - 1)));
-        Toast.makeText(this, R.string.reorder_hint, Toast.LENGTH_LONG).show();
+        showReorderHint();
     }
+
+    /**
+     * How reorder works. A toast sits at the foot of the screen, over the dock being reordered, and Android no longer
+     * lets an app move it; with center_clock it is a glass note at the top instead, over the greeting line.
+     */
+    private void showReorderHint() {
+        if (!HeaderExtras.themeFlag(this, "center_clock")) {
+            Toast.makeText(this, R.string.reorder_hint, Toast.LENGTH_LONG).show();
+            return;
+        }
+        if (reorderHint != null) root.removeView(reorderHint);
+        TextView hint = new TextView(this);
+        hint.setText(R.string.reorder_hint);
+        hint.setTextColor(getColor(R.color.text_primary));
+        hint.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 15);
+        hint.setTypeface(getResources().getFont(R.font.outfit_regular));
+        hint.setGravity(Gravity.CENTER);
+        hint.setPadding((int) (22 * density), (int) (11 * density), (int) (22 * density), (int) (11 * density));
+        GradientDrawable glass = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[] {getColor(R.color.glass_top), getColor(R.color.glass_bottom)});
+        glass.setCornerRadius(24 * density);
+        glass.setStroke(Math.max(1, (int) density), getColor(R.color.glass_edge));
+        hint.setBackground(glass);
+        hint.setFocusable(false);
+        hint.setElevation(8 * density);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+        lp.topMargin = (int) (26 * density);
+        root.addView(hint, lp);
+        HebrewFont.apply(hint);
+        reorderHint = hint;
+        hint.setAlpha(0f);
+        hint.animate().alpha(1f).setDuration(220).start();
+        hint.postDelayed(() -> hint.animate().alpha(0f).setDuration(400).withEndAction(() -> {
+            root.removeView(hint);
+            if (reorderHint == hint) reorderHint = null;
+        }).start(), 4500);
+    }
+
+    /** The glass reorder note while it is up. */
+    private TextView reorderHint;
 
     /** The start shared by reorder and edit-dock mode. False when there is nothing to move. */
     private boolean beginReorder() {
@@ -3522,7 +3564,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             if (at < 0) return;
             focusTile(at);
             pickUp(at);
-            Toast.makeText(this, R.string.reorder_hint, Toast.LENGTH_LONG).show();
+            showReorderHint();
         });
         if (appLibraryEnabled) addSettingsMenuRow(rows, popup, R.string.library_remove_shortcut, () -> {
             if (LibraryApps.save(this, pkg, false)) reloadApps(false);
