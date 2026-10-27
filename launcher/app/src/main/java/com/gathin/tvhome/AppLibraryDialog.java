@@ -351,14 +351,26 @@ final class AppLibraryDialog {
         header.setGravity(Gravity.CENTER_VERTICAL);
         header.setPadding(dp(12), dp(4), dp(8), dp(4));
         TextView title = text(activity.getString(R.string.app_library), 22, Color.WHITE);
-        header.addView(title, new LinearLayout.LayoutParams(0, dp(36), 1));
         title.setGravity(Gravity.CENTER_VERTICAL);
         title.setSingleLine(true);
         title.setEllipsize(TextUtils.TruncateAt.END);
         TextView count = text(activity.getResources().getQuantityString(
                 R.plurals.library_app_count, totalApps, totalApps), 13, 0xA6FFFFFF);
         count.setSingleLine(true);
-        header.addView(count, new LinearLayout.LayoutParams(-2, -2));
+        // Hebrew text sits at the right of its view, so the title ran into the count after it: in Hebrew the title
+        // goes right and the count left, with a gap, as the launcher lays out left to right (no supportsRtl).
+        boolean hebrew = HebrewFont.hebrew(activity);
+        LinearLayout.LayoutParams countLp = new LinearLayout.LayoutParams(-2, -2);
+        if (hebrew) {
+            countLp.rightMargin = dp(16);
+            header.addView(count, countLp);
+            title.setGravity(Gravity.CENTER_VERTICAL | Gravity.RIGHT);
+            header.addView(title, new LinearLayout.LayoutParams(0, dp(36), 1));
+        } else {
+            countLp.leftMargin = dp(16);
+            header.addView(title, new LinearLayout.LayoutParams(0, dp(36), 1));
+            header.addView(count, countLp);
+        }
         panel.addView(header, new LinearLayout.LayoutParams(-1, dp(44)));
         instructions = text(hint(false), 13, 0xBBFFFFFF);
         instructions.setSingleLine(true);
