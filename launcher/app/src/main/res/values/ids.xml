@@ -2,4 +2,6 @@
 <resources>
     <!-- View tag: a quick panel tile's lasting name, for the order the panel's arrange button saves. -->
     <item name="panel_key" type="id" />
+    <!-- ps5_home: the top bar's settings button, where Up from the row lands. -->
+    <item name="ps5_gear" type="id" />
 </resources>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="switch_panel">הגדרות מהירות</string>
+    <string name="switch_open">פתיחה</string>
+    <string name="ds_icon_size">גודל אייקונים</string>
+</resources>

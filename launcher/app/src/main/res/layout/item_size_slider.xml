@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ds_home's icon-size slider in the quick panel: drawn like the glass slider above it (activity_quick_vision.xml). -->
+<SeekBar xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="0dp"
+    android:layout_height="36dp"
+    android:layout_weight="1"
+    android:minHeight="4dp"
+    android:maxHeight="4dp"
+    android:focusable="true"
+    android:background="@drawable/vision_slider_bg"
+    android:progressTint="@color/text_primary"
+    android:progressBackgroundTint="#99FFFFFF"
+    android:thumbTint="@color/text_primary" />

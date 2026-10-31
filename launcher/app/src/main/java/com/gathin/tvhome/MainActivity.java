@@ -204,6 +204,12 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private HeaderExtras headerExtras;
     /** recent_apps: cards for the apps opened last, above the dock; null when the theme has none. */
     private RecentRow recentRow;
+    /** The theme's ps5_home: the console-style top bar, shelf and artwork; null otherwise. */
+    private Ps5Home ps5;
+    /** The theme's switch_home: the handheld-console layout; null otherwise. */
+    private SwitchHome sw;
+    /** The theme's ds_home: the two-screen handheld layout; null otherwise. */
+    private DsHome ds;
     /** LauncherLocale.revision this Home was built with; a different one in onResume rebuilds it. */
     private int localeRevision;
     /** Hebrew bar: sizes and places the greeting against the clock, after layout and after a new greeting text. */
@@ -404,6 +410,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         Config cfg = Config.load(this);
         AppAdapter.square = HeaderExtras.themeFlag(this, "square_tiles");
         AppAdapter.dockExtras = HeaderExtras.themeFlag(this, "dock_extras");
+        AppAdapter.ps5 = Ps5Home.on(this);
+        AppAdapter.nx = SwitchHome.on(this);
+        AppAdapter.ds = DsHome.on(this);
         homeAppKeys = RemoteKeys.parseAppKeys(cfg.appKeys);
         appLibrarySelection = cfg.appLibrarySelection;
         libraryOkOpens = cfg.libraryOkOpens;
@@ -414,7 +423,12 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         applyViewInputsHandler(cfg.handleViewInputs);
         settingsKeycodes = cfg.settingsKeycodes;
         settingsKeyPanel = cfg.settingsKeyPanel;
-        COLUMNS = cfg.columns;
+        // ps5_home: a row of many small tiles, whatever the columns.
+        if (Ps5Home.on(this)) Ps5Home.load(this);
+        if (SwitchHome.on(this)) SwitchHome.load(this);
+        if (DsHome.on(this)) DsHome.load(this);
+        COLUMNS = Ps5Home.on(this) ? Ps5Home.columns : SwitchHome.on(this) ? SwitchHome.columns
+                : DsHome.on(this) ? DsHome.columns : cfg.columns;
         animations = cfg.animations;
         advancedEffects = cfg.animations && cfg.advancedEffects;
         reducedMotion = cfg.reducedMotion;
@@ -597,13 +611,16 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 if (dockRow && getPosition(child) < COLUMNS) return false;
                 int top = child.getTop() + rect.top;
                 int bottom = top + rect.height();
+                // ds_home clips its grid at the padding (the top strip and the bottom bar sit there): a row is on
+                // screen only between the two padding lines.
+                int limitTop = AppAdapter.ds ? getPaddingTop() : 0;
                 // A row already fully on screen stays put, even inside the bottom padding (the last row
                 // rows_below_dock leaves visible ends there; nudging it up was the bug). A row that has to scroll
                 // in still stops at the padding line, clear of the screen edge, as before.
                 int limitBottom = getHeight() - getPaddingBottom();
                 int dy;
-                if (top < 0) dy = top;
-                else if (bottom <= getHeight()) dy = 0;
+                if (top < limitTop) dy = top - limitTop;
+                else if (bottom <= (AppAdapter.ds ? limitBottom : getHeight())) dy = 0;
                 else dy = Math.min(top, bottom - limitBottom);
                 if (dy == 0) return false;
                 if (immediate || reducedMotion || !animations) parent.scrollBy(0, dy);
@@ -670,6 +687,12 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             // A single row never shows the names under its tiles (the title above the row names the app), so the
             // 7dp gap and 22dp label item_app.xml keeps for them would only lift the row: sit it that much lower.
             if (singleRow && !cfg.alwaysShowNames) want += (int) (29 * density);
+            // ps5_home: the row sits high, just under the top bar.
+            if (AppAdapter.ps5) want = (int) (20 * density);
+            // switch_home: the row of large tiles a little above the middle, the button bar below it.
+            if (AppAdapter.nx) want = (int) (h * 0.2f);
+            // ds_home: the grid starts under the top strip.
+            if (AppAdapter.ds) want = (int) (78 * density);
             if (grid.getPaddingTop() != want) {
                 grid.setPadding(grid.getPaddingLeft(), want, grid.getPaddingRight(), grid.getPaddingBottom());
                 // A vertical grid parks the dock on the new padding line by scrolling (onTileFocused); a sideways
@@ -845,7 +868,22 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         btnLibraryTop.setOnKeyListener(pillKeys);
         for (View button : topAppButtons) button.setOnKeyListener(pillKeys);
         if (HeaderExtras.themeFlag(this, "center_clock")) stackTopButtons();
-        if (advancedEffects) {
+        if (AppAdapter.ps5) {
+            ps5 = new Ps5Home(this, root, (LinearLayout) hero, heroName, heroMeta, takeCornerButtons(),
+                    () -> focusTile(lastFocused), this::onLibraryRequested,
+                    () -> startActivity(new Intent(this, QuickSettingsActivity.class)));
+        } else if (AppAdapter.nx) {
+            sw = new SwitchHome(this, root, (LinearLayout) hero, heroName, heroMeta, takeCornerButtons(),
+                    () -> focusTile(lastFocused), this::onLibraryRequested,
+                    () -> startActivity(new Intent(this, QuickSettingsActivity.class)));
+            glass.setVisibility(View.GONE);   // the tile's ring is the focus
+        } else if (AppAdapter.ds) {
+            ds = new DsHome(this, root, grid, hero, takeCornerButtons(), () -> focusTile(lastFocused),
+                    this::onLibraryRequested, () -> startActivity(new Intent(this, QuickSettingsActivity.class)));
+            glass.setVisibility(View.GONE);
+        }
+        // The console bars give these buttons their own focus (a white disc): this zoom would replace it.
+        if (advancedEffects && ps5 == null && sw == null && ds == null) {
             List<View> pills = new ArrayList<>(Arrays.asList(btnInputs, btnWifi, btnVpn, btnReorder, btnLibraryTop, btnSettings));
             pills.addAll(topAppButtons);
             for (View button : pills) {
@@ -1001,6 +1039,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     @Override
     protected void onResume() {
         super.onResume();
+        if (HeaderExtras.themeFlag(this, "own_screensaver")) ServiceRepair.claimScreensaver(this);
         // The quick settings panel's language button: rebuild Home in the other language.
         if (localeRevision != LauncherLocale.revision) {
             localeRevision = LauncherLocale.revision;
@@ -1743,6 +1782,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     public void onTileFocused(int position, View card) {
         lastFocused = position;
         lastFocusedKey = adapter.keyAt(position);
+        if (ds != null) ds.focused(adapter.labelAt(position));
         // Focus restored before the first layout (cold start): the tile has no size yet, and the glass
         // would be sized to 2*pad. Run again once the tile is laid out.
         if (card.getWidth() == 0) {
@@ -1811,6 +1851,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 if (!animations || reducedMotion) grid.scrollBy(0, dy);
                 else grid.smoothScrollBy(0, dy);
             }
+            if (sw != null) sw.focused(card);
             showHero(position, scroll ? r.top - dy : r.top);
         } else {
             // Below the dock (or in a plain grid) the glow follows the tile without the big name; letting it
@@ -1843,7 +1884,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private void showHero(int position, float dockTopInRoot) {
         String label = adapter.labelAt(position);
         int color = adapter.ambientColorAt(position);
-        float y = dockTopInRoot - 14 * density - 26 * density - hero.getHeight();
+        float y = ps5 != null ? ps5.heroY(root.getHeight()) : sw != null ? sw.heroY() : dockTopInRoot - 14 * density - 26 * density - hero.getHeight();
         boolean changed = !label.contentEquals(heroName.getText());
         if (cinematic && heroArtAlpha > 0f) showHeroArt(position);
 
@@ -1901,6 +1942,12 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     /** The shelf's text for this dock app: its name and, on the cinematic shelf, "Last opened" and the dots. */
     private void fillHero(int position, String label) {
         heroName.setText(label);
+        if (sw != null) return;
+        if (ps5 != null) {
+            if (ps5.showsLastOpened()) updateHeroMeta(position);
+            ps5.fill(adapter.packageAt(position));
+            return;
+        }
         if (!cinematic) return;
         updateHeroMeta(position);
         updateHeroDots(position);
@@ -2363,6 +2410,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
                 // Up: the recent apps above the dock, else the top-right buttons. The default focus search finds
                 // neither when they are not straight above the tile.
+                if (ps5 != null) return ps5.focusBar();
+                if (sw != null) return true;
                 RecyclerView.ViewHolder from = grid.findViewHolderForAdapterPosition(position);
                 if (recentRow != null && recentRow.focusNear(from != null ? from.itemView : null)) return true;
                 if (topBarEntry != null) {
@@ -2371,7 +2420,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 }
                 return false;
             }
-            if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) return true;
+            if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+                if (sw != null) sw.focusBar();   // switch_home: the round buttons under the row
+                return true;
+            }
             boolean forward = rtlAppGrid ? keyCode == KeyEvent.KEYCODE_DPAD_LEFT : keyCode == KeyEvent.KEYCODE_DPAD_RIGHT;
             int last = adapter.focusablePosition(count - 1);
             if (forward && position >= last) {
@@ -2394,7 +2446,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                     rtlAppGrid, keyCode == KeyEvent.KEYCODE_DPAD_LEFT);
         }
         if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
-            if (position < COLUMNS) return false;          // dock row: let focus move to the top bar
+            if (position < COLUMNS) return ds != null && ds.focusBar();   // dock row: let focus move to the top bar
             target = position - COLUMNS;
         } else {
             int lastRowStart = ((count - 1) / COLUMNS) * COLUMNS;
@@ -2525,6 +2577,18 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private View topBarEntry;
 
     private void focusTopBar() {
+        if (ps5 != null) {
+            ps5.focusBar();
+            return;
+        }
+        if (sw != null) {
+            sw.focusBar();
+            return;
+        }
+        if (ds != null) {
+            ds.focusBar();
+            return;
+        }
         View to = topBarEntry != null ? topBarEntry : findViewById(R.id.btnSettings);
         if (to != null) to.requestFocus();
     }
@@ -2537,6 +2601,22 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             if (button != btnInputs && button.getVisibility() == View.VISIBLE) return button;
         }
         return findViewById(R.id.btnSettings);
+    }
+
+    /**
+     * The console layouts: the top-right buttons (Inputs, the network, Bluetooth, Reorder, Settings) leave their
+     * corner for the layout's own bar, icons only, in bar order.
+     */
+    private List<View> takeCornerButtons() {
+        makeIconOnly((TextView) btnInputs);
+        LinearLayout corner = findViewById(R.id.topButtons);
+        List<View> buttons = new ArrayList<>();
+        for (int i = 0; i < corner.getChildCount(); i++) {
+            View button = corner.getChildAt(i);
+            if (button.getVisibility() == View.VISIBLE) buttons.add(button);
+        }
+        for (View button : buttons) corner.removeView(button);
+        return buttons;
     }
 
     /** top_bar_apps buttons, in bar order. */
@@ -2707,7 +2787,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
     private void updateClockVisibility() {
         boolean valid = System.currentTimeMillis() >= TIME_VALID_AFTER_MS;
-        clockBlock.setVisibility(valid ? View.VISIBLE : View.INVISIBLE);
+        // ps5_home keeps the header's clock away: its own sits in the top bar.
+        clockBlock.setVisibility(ps5 != null || sw != null || ds != null ? View.GONE : valid ? View.VISIBLE : View.INVISIBLE);
         handler.removeCallbacks(clockCheck);
         if (valid) {
             updateGreeting();

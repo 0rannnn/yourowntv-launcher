@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Two controller halves side by side, the corner mark of switch_home. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M10.5,2H8C5.24,2 3,4.24 3,7v10c0,2.76 2.24,5 5,5h2.5V2zM7.75,10.5c-0.97,0 -1.75,-0.78 -1.75,-1.75S6.78,7 7.75,7 9.5,7.78 9.5,8.75 8.72,10.5 7.75,10.5z" />
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M13.5,2H16c2.76,0 5,2.24 5,5v10c0,2.76 -2.24,5 -5,5h-2.5V2zM16.25,17c-0.97,0 -1.75,-0.78 -1.75,-1.75s0.78,-1.75 1.75,-1.75 1.75,0.78 1.75,1.75S17.22,17 16.25,17z" />
+</vector>

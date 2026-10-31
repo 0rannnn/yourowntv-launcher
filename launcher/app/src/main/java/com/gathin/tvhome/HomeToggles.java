@@ -54,6 +54,15 @@ final class HomeToggles {
         prefs(ctx).edit().putInt(GLASS, Math.max(0, Math.min(100, level))).apply();
     }
 
+    /** ds_home's icon size, a step of DsHome.SIZES picked with the quick panel's slider; -1 until one is picked. */
+    static int dsSize(Context ctx) {
+        return prefs(ctx).getInt("ds_size", -1);
+    }
+
+    static void setDsSize(Context ctx, int step) {
+        prefs(ctx).edit().putInt("ds_size", step).commit();
+    }
+
     /** The theme picked in the quick panel (a folder name under themes/), or "" for the one the tools pushed. */
     static String theme(Context ctx) {
         return prefs(ctx).getString(THEME, "");

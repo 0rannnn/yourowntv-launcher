@@ -220,6 +220,7 @@ public final class QuickSettingsActivity extends Activity {
         gear.setNextFocusDownId(tiles.getChildAt(0).getId());
         language.setNextFocusDownId(tiles.getChildAt(0).getId());
         if (vision) addGlassSlider();
+        if (vision && DsHome.on(this)) addIconSizeSlider();
         // Mirroring takes the views out and puts them back, which drops the focus: mirror first, then focus.
         if (vision && HebrewFont.hebrew(this)) mirrorForHebrew();
         addFocusMotion(findViewById(R.id.panel));
@@ -272,6 +273,86 @@ public final class QuickSettingsActivity extends Activity {
             public void onStopTrackingTouch(android.widget.SeekBar bar) {
             }
         });
+    }
+
+    /**
+     * ds_home only: an icon-size slider under the glass one. Each step is a number of tiles across Home's grid
+     * (DsHome.SIZES); Home rebuilds with it when it is back in front (the settings revision moves).
+     */
+    private void addIconSizeSlider() {
+        LinearLayout glassRow = findViewById(R.id.visionGlassRow);
+        ViewGroup card = (ViewGroup) glassRow.getParent();
+        float d = getResources().getDisplayMetrics().density;
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(glassRow.getPaddingLeft(), 0, glassRow.getPaddingRight(), 0);
+        ImageView icon = new ImageView(this);
+        icon.setImageResource(R.drawable.ic_apps);
+        row.addView(icon, new LinearLayout.LayoutParams(Math.round(20 * d), Math.round(20 * d)));
+        TextView label = new TextView(this);
+        label.setText(R.string.ds_icon_size);
+        label.setTextColor(getColor(R.color.text_primary));
+        label.setTextSize(13);
+        label.setTypeface(UiFont.get(this, R.string.font_medium));
+        LinearLayout.LayoutParams labelLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        labelLp.setMarginStart(Math.round(8 * d));
+        row.addView(label, labelLp);
+        android.widget.SeekBar slider = (android.widget.SeekBar) getLayoutInflater()
+                .inflate(R.layout.item_size_slider, row, false);
+        slider.setMax(DsHome.SIZES.length - 1);
+        slider.setKeyProgressIncrement(1);
+        row.addView(slider);
+        TextView value = new TextView(this);
+        value.setGravity(Gravity.CENTER);
+        value.setTextColor(getColor(R.color.vision_text));
+        value.setTextSize(12);
+        value.setTypeface(UiFont.get(this, R.string.font_medium));
+        row.addView(value, new LinearLayout.LayoutParams(Math.round(42 * d), ViewGroup.LayoutParams.WRAP_CONTENT));
+        DsHome.load(this);
+        int step = HomeToggles.dsSize(this) >= 0 ? HomeToggles.dsSize(this) : DsHome.stepFor(DsHome.columns);
+        slider.setProgress(step);
+        value.setText(String.valueOf(step + 1));
+        if (HebrewFont.hebrew(this)) {
+            // As the glass slider: filled from the right, Left still makes the icons bigger.
+            slider.setScaleX(-1f);
+            slider.setOnKeyListener((v, keyCode, event) -> {
+                if (keyCode != KeyEvent.KEYCODE_DPAD_LEFT && keyCode != KeyEvent.KEYCODE_DPAD_RIGHT) return false;
+                if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                    slider.incrementProgressBy(keyCode == KeyEvent.KEYCODE_DPAD_LEFT ? 1 : -1);
+                }
+                return true;
+            });
+            for (int i = row.getChildCount() - 1; i >= 0; i--) {
+                View child = row.getChildAt(i);
+                row.removeViewAt(i);
+                row.addView(child);
+            }
+        }
+        slider.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(android.widget.SeekBar bar, int level, boolean fromUser) {
+                HomeToggles.setDsSize(QuickSettingsActivity.this, level);
+                value.setText(String.valueOf(level + 1));
+                // Home rebuilds its grid with the new size when it comes back in front.
+                android.content.SharedPreferences choices = getSharedPreferences(Config.SETTINGS_NAME, MODE_PRIVATE);
+                choices.edit().putLong(Config.SETTINGS_REVISION_KEY,
+                        choices.getLong(Config.SETTINGS_REVISION_KEY, 0) + 1).commit();
+            }
+
+            @Override
+            public void onStartTrackingTouch(android.widget.SeekBar bar) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(android.widget.SeekBar bar) {
+            }
+        });
+        LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        rowLp.topMargin = Math.round(2 * d);
+        card.addView(row, card.indexOfChild(glassRow) + 1, rowLp);
     }
 
     private void applyCardGlass(int level) {

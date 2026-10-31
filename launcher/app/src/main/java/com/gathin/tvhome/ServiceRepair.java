@@ -101,6 +101,28 @@ final class ServiceRepair {
                 && Settings.Secure.putString(cr, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, updated);
     }
 
+    /**
+     * The theme's own_screensaver: keeps the launcher's ClockDream as the system screensaver. Some Google TV builds
+     * put their own back (after an update or a reboot); Home starting or coming back sets ours again, when the
+     * installer granted WRITE_SECURE_SETTINGS.
+     */
+    static void claimScreensaver(Context context) {
+        if (context.checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS)
+                != PackageManager.PERMISSION_GRANTED) return;
+        try {
+            ContentResolver cr = context.getContentResolver();
+            String ours = new ComponentName(context, ClockDream.class).flattenToShortString();
+            if (!ours.equals(Settings.Secure.getString(cr, "screensaver_components"))) {
+                Settings.Secure.putString(cr, "screensaver_components", ours);
+            }
+            if (Settings.Secure.getInt(cr, "screensaver_enabled", 1) != 1) {
+                Settings.Secure.putInt(cr, "screensaver_enabled", 1);
+            }
+        } catch (RuntimeException ignored) {
+            // The setting is the system's; a refusal leaves the screensaver as it was.
+        }
+    }
+
     private static SharedPreferences prefs(Context context) {
         return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }

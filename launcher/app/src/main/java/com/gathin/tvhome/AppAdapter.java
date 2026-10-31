@@ -112,9 +112,10 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         int design = Math.round(DESIGN_W_DP * density);
         if (innerWidthPx <= 0 || columns <= 0) return square ? Math.round(SQUARE_DP * density) : design;
         int cell = innerWidthPx / columns;
-        int fit = (int) ((cell - 12 * density) / FOCUS_SCALE);
-        int w = Math.max(Math.round(80 * density), Math.min(design, fit));
-        return square ? Math.min(w, Math.round(SQUARE_DP * density)) : w;
+        int fit = (int) ((cell - 12 * density) / (ps5 ? Ps5Home.zoom : nx ? SwitchHome.ZOOM : FOCUS_SCALE));
+        // ps5_home's row of small tiles goes below the 80dp floor the grids keep.
+        int w = Math.max(Math.round((ps5 || ds ? 40 : 80) * density), Math.min(design, fit));
+        return square ? Math.min(w, Math.round((nx || ds ? 200 : SQUARE_DP) * density)) : w;
     }
 
     static int tileHeightPx(int tileWidthPx) {
@@ -128,6 +129,12 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
     static boolean square;
     /** The theme's dock_extras: ⚙ (the quick panel) and "…" (the App library) at the end of the row; set as square. */
     static boolean dockExtras;
+    /** The theme's ps5_home (Ps5Home): a bigger zoom on the focused tile, its name under it. Set with square. */
+    static boolean ps5;
+    /** The theme's switch_home (SwitchHome): large square tiles, a ring round the focused one instead of the glass. */
+    static boolean nx;
+    /** The theme's ds_home (DsHome): a grid of framed square tiles, a ring round the focused one, no names under. */
+    static boolean ds;
     /** A square tile's side (dp). */
     static final float SQUARE_DP = 92f;
 
@@ -430,7 +437,8 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         card.setLayoutParams(cardLp);
         View name = v.findViewById(R.id.name);
         ViewGroup.MarginLayoutParams nameLp = (ViewGroup.MarginLayoutParams) name.getLayoutParams();
-        nameLp.width = w;
+        // ps5_home: the name under the zoomed tile may run wider than the small tile, centred under it.
+        nameLp.width = ps5 ? Math.round(w * 2.4f) : w;
         nameLp.topMargin = h + Math.round((dockRow ? 7 : 4) * density);
         if (!dockRow) {
             // Compact spacing (COMPACT_ITEM_EXTRA_DP): 4dp item padding and a 20dp name instead of 8dp and 22dp.
@@ -484,8 +492,13 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         // The dock has no labels, unless always_show_names asks for them (DockDecoration then makes room in the band).
         // In a single row every tile is the dock's kind: the big title above names it.
         boolean dockKind = dockRow && (singleRow || position < dockSize);
-        h.name.setVisibility(dockKind && restNameAlpha == 0f ? View.INVISIBLE : View.VISIBLE);
+        // ds_home names the focused app in its bottom bar instead.
+        h.name.setVisibility(ds || dockKind && restNameAlpha == 0f && !ps5 ? View.INVISIBLE : View.VISIBLE);
         boolean focused = h.card.isFocused();   // a rebind after reload() can hit the focused tile
+        if (ds) {
+            int w = h.card.getLayoutParams().width;
+            ((FrameLayout) h.card).setForeground(focused ? DsHome.ring(ctx, w) : DsHome.frame(ctx, w));
+        }
         h.name.setAlpha(focused ? 1f : restNameAlpha);
         h.card.setScaleX(focused && animations ? focusScale() : 1f);
         h.card.setScaleY(focused && animations ? focusScale() : 1f);
@@ -702,7 +715,8 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
     }
 
     float focusScale() {
-        return !animations ? 1f : advancedEffects ? 1.12f : 1.10f;
+        return !animations ? 1f : ps5 ? Ps5Home.zoom : nx ? SwitchHome.ZOOM : ds ? DsHome.ZOOM
+                : advancedEffects ? 1.12f : 1.10f;
     }
 
     /** A vivid colour sampled from the app's banner (or icon), cached per entry; a card's accent when it set one. */
@@ -961,8 +975,28 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
                 view.animate().cancel();
                 banner.animate().cancel();
                 name.animate().cancel();
-                float scale = !animations ? 1f : advancedEffects ? 1.12f : 1.10f;
+                float scale = !animations ? 1f : ps5 ? Ps5Home.zoom : nx ? SwitchHome.ZOOM : ds ? DsHome.ZOOM
+                        : advancedEffects ? 1.12f : 1.10f;
+                if (ds) {
+                    // ds_home: every tile wears the white frame; the focused one the pulsing ring.
+                    Drawable mark = focused ? DsHome.ring(view.getContext(), view.getWidth())
+                            : DsHome.frame(view.getContext(), view.getWidth());
+                    ((FrameLayout) view).setForeground(mark);
+                    if (focused) DsHome.pulse(mark);
+                }
+                if (nx) {
+                    // switch_home: the ring marks the focus; it breathes while the tile keeps it.
+                    if (focused) {
+                        Drawable ring = SwitchHome.ring(view.getContext(), view.getWidth());
+                        ((FrameLayout) view).setForeground(ring);
+                        SwitchHome.pulse(ring);
+                    } else {
+                        ((FrameLayout) view).setForeground(null);
+                    }
+                }
                 float s = focused ? scale : 1f;
+                // ps5_home: the name moves down with the bottom edge of the bigger zoom.
+                float nameDrop = density * 4f + (ps5 ? (scale - 1f) * view.getHeight() / 2f : 0f);
                 if (!animations) {
                     view.setScaleX(1f);
                     view.setScaleY(1f);
@@ -985,7 +1019,7 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
                     // Same place as the full motion's slide ends: the layout's -6dp is only its starting point, and
                     // left there the name overlaps the zoomed tile.
                     // Only on focus: snapping it back to -6dp while it fades out would jump it up over the tile.
-                    if (focused) name.setTranslationY(density * 4f);
+                    if (focused) name.setTranslationY(nameDrop);
                 } else {
                     view.animate().scaleX(s).scaleY(s)
                             .translationY(focused && advancedEffects ? -4f * density : 0f)
@@ -999,7 +1033,7 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
                                 .setDuration(280).start();
                     }
                     name.animate().alpha(focused ? 1f : restNameAlpha)
-                            .translationY(focused ? density * 4f : -density * 6f)
+                            .translationY(focused ? nameDrop : -density * 6f)
                             .setDuration(220).start();
                 }
                 int pos = getBindingAdapterPosition();

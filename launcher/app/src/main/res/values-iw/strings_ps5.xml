@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ps5_tab_apps">אפליקציות</string>
+    <string name="ps5_tab_library">ספרייה</string>
+    <string name="ps5_search">חיפוש</string>
+    <string name="ps5_wake">לחץ על כפתור כלשהו כדי להמשיך</string>
+</resources>

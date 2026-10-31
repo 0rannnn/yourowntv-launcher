@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- switch_home: the quick panel's round button, and the hint beside the OK key in the corner. -->
+    <string name="switch_panel">Quick settings</string>
+    <string name="switch_open">Open</string>
+    <!-- ds_home: the quick panel's slider for the size of Home's app icons. -->
+    <string name="ds_icon_size">Icon size</string>
+</resources>

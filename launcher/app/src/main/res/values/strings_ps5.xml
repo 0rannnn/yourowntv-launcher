@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ps5_home's top bar: the page shown, the App library, and search. -->
+    <string name="ps5_tab_apps">Apps</string>
+    <string name="ps5_tab_library">Library</string>
+    <string name="ps5_search">Search</string>
+    <!-- The ps5_home screensaver's line under the date. -->
+    <string name="ps5_wake">Press any button to continue</string>
+</resources>
