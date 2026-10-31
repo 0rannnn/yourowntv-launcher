@@ -35,7 +35,8 @@ final class Ps5Scene implements DreamScene {
 
     private final Context ctx;
     private final Handler handler = new Handler(Looper.getMainLooper());
-    private final ExecutorService loader = Executors.newSingleThreadExecutor();
+    /** One loader thread for every instance: a new Home or screensaver must not start one more. */
+    private static final ExecutorService loader = Executors.newSingleThreadExecutor();
     private final FrameLayout root;
     private final ImageView photo;
     private final LinearLayout text;

@@ -69,7 +69,8 @@ final class Ps5Home {
     /** The bar's focusable views, left to right on screen. */
     private final List<View> bar = new ArrayList<>();
     private final LruCache<String, Bitmap> artCache = new LruCache<>(2);
-    private final ExecutorService loader = Executors.newSingleThreadExecutor();
+    /** One loader thread for every instance: a new Home or screensaver must not start one more. */
+    private static final ExecutorService loader = Executors.newSingleThreadExecutor();
     private final Handler main = new Handler(Looper.getMainLooper());
     private String artPkg;
     private final JSONObject cfg;

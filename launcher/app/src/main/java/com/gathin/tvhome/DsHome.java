@@ -1,7 +1,5 @@
 package com.gathin.tvhome;
 
-import android.animation.ObjectAnimator;
-import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
@@ -48,7 +46,6 @@ final class DsHome {
 
     private static final int[] TAB_COLORS = {0xFF5A7FA8, 0xFFE3B800, 0xFFF07A1E, 0xFF1DB3A0, 0xFF2A8CDB, 0xFF3BAA35,
             0xFFE5383B, 0xFF8E44AD};
-    private static ObjectAnimator pulse;
 
     private final Activity activity;
     private final float density;
@@ -111,16 +108,6 @@ final class DsHome {
         int inset = Math.round(5 * d);
         both.setLayerInset(1, inset, inset, inset, inset);
         return both;
-    }
-
-    /** Breathes the ring's strength while its tile keeps the focus; one ring pulses at a time. */
-    static void pulse(Drawable ring) {
-        if (pulse != null) pulse.cancel();
-        pulse = ObjectAnimator.ofInt(ring, "alpha", 255, 120);
-        pulse.setDuration(700);
-        pulse.setRepeatMode(ValueAnimator.REVERSE);
-        pulse.setRepeatCount(ValueAnimator.INFINITE);
-        pulse.start();
     }
 
     /** A ds_show_* setting: on unless the theme turns it off. */

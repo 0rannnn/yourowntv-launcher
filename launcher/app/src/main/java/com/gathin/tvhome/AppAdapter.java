@@ -497,7 +497,9 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         boolean focused = h.card.isFocused();   // a rebind after reload() can hit the focused tile
         if (ds) {
             int w = h.card.getLayoutParams().width;
-            ((FrameLayout) h.card).setForeground(focused ? DsHome.ring(ctx, w) : DsHome.frame(ctx, w));
+            Drawable mark = focused ? DsHome.ring(ctx, w) : DsHome.frame(ctx, w);
+            ((FrameLayout) h.card).setForeground(mark);
+            if (focused) RingPulse.start(mark);   // the new ring breathes, not the one this rebind replaced
         }
         h.name.setAlpha(focused ? 1f : restNameAlpha);
         h.card.setScaleX(focused && animations ? focusScale() : 1f);
@@ -977,22 +979,15 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
                 name.animate().cancel();
                 float scale = !animations ? 1f : ps5 ? Ps5Home.zoom : nx ? SwitchHome.ZOOM : ds ? DsHome.ZOOM
                         : advancedEffects ? 1.12f : 1.10f;
-                if (ds) {
-                    // ds_home: every tile wears the white frame; the focused one the pulsing ring.
-                    Drawable mark = focused ? DsHome.ring(view.getContext(), view.getWidth())
-                            : DsHome.frame(view.getContext(), view.getWidth());
+                if (ds || nx) {
+                    // switch_home and ds_home: the focused tile wears a breathing ring; ds_home's others a white frame.
+                    // The ring stops breathing the moment its tile lets go (RingPulse).
+                    if (!focused) RingPulse.stopIf(((FrameLayout) view).getForeground());
+                    Drawable mark = focused ? (ds ? DsHome.ring(view.getContext(), view.getWidth())
+                            : SwitchHome.ring(view.getContext(), view.getWidth()))
+                            : ds ? DsHome.frame(view.getContext(), view.getWidth()) : null;
                     ((FrameLayout) view).setForeground(mark);
-                    if (focused) DsHome.pulse(mark);
-                }
-                if (nx) {
-                    // switch_home: the ring marks the focus; it breathes while the tile keeps it.
-                    if (focused) {
-                        Drawable ring = SwitchHome.ring(view.getContext(), view.getWidth());
-                        ((FrameLayout) view).setForeground(ring);
-                        SwitchHome.pulse(ring);
-                    } else {
-                        ((FrameLayout) view).setForeground(null);
-                    }
+                    if (focused) RingPulse.start(mark);
                 }
                 float s = focused ? scale : 1f;
                 // ps5_home: the name moves down with the bottom edge of the bigger zoom.

@@ -32,7 +32,8 @@ import java.util.concurrent.Executors;
  */
 final class DsScene implements DreamScene {
     private final Handler handler = new Handler(Looper.getMainLooper());
-    private final ExecutorService loader = Executors.newSingleThreadExecutor();
+    /** One loader thread for every instance: a new Home or screensaver must not start one more. */
+    private static final ExecutorService loader = Executors.newSingleThreadExecutor();
     private final Context ctx;
     private final FrameLayout root;
     private final ImageView back;

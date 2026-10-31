@@ -1,7 +1,5 @@
 package com.gathin.tvhome;
 
-import android.animation.ObjectAnimator;
-import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
@@ -48,7 +46,6 @@ final class SwitchHome {
     /** The ring's colour (switch_accent). Set by load(). */
     static int accent = 0xFF19B8E6;
 
-    private static ObjectAnimator pulse;
 
     private final Activity activity;
     private final float density;
@@ -97,16 +94,6 @@ final class SwitchHome {
         int inset = Math.round(5 * d);
         both.setLayerInset(1, inset, inset, inset, inset);
         return both;
-    }
-
-    /** Breathes the ring's strength while its tile keeps the focus; one ring pulses at a time. */
-    static void pulse(Drawable ring) {
-        if (pulse != null) pulse.cancel();
-        pulse = ObjectAnimator.ofInt(ring, "alpha", 255, 140);
-        pulse.setDuration(900);
-        pulse.setRepeatMode(ValueAnimator.REVERSE);
-        pulse.setRepeatCount(ValueAnimator.INFINITE);
-        pulse.start();
     }
 
     /** A switch_show_* setting: on unless the theme turns it off. */

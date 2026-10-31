@@ -1039,6 +1039,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     @Override
     protected void onResume() {
         super.onResume();
+        RingPulse.resume();
         if (HeaderExtras.themeFlag(this, "own_screensaver")) ServiceRepair.claimScreensaver(this);
         // The quick settings panel's language button: rebuild Home in the other language.
         if (localeRevision != LauncherLocale.revision) {
@@ -1261,6 +1262,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     @Override
     protected void onPause() {
         super.onPause();
+        RingPulse.pause();
         if (navSound != null) navSound.restoreSystemTick();
         root.removeCallbacks(showIdleClock);
         endReorder();   // Home or another app while reordering keeps the order so far
