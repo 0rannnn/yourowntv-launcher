@@ -102,6 +102,39 @@ final class ServiceRepair {
     }
 
     /**
+     * The theme's keep_key_helper: the remote's Settings (and Home) button helper stays on, whatever took it off. A
+     * restart can empty the enabled list before the helper ever connects (seen on a Formovie C045, Android 14: the list
+     * was null after boot), and then restore() has no record to bring back. Home starting or coming back puts the
+     * helper on the list again, keeping any other services there, when the installer granted WRITE_SECURE_SETTINGS.
+     */
+    static void keepHomeKey(Context context) {
+        if (context.checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS)
+                != PackageManager.PERMISSION_GRANTED) return;
+        try {
+            ContentResolver cr = context.getContentResolver();
+            String helper = new ComponentName(context, HomeKeyService.class).flattenToShortString();
+            String list = Settings.Secure.getString(cr, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+            boolean listed = false;
+            if (list != null) {
+                for (String entry : list.split(":")) {
+                    ComponentName name = ComponentName.unflattenFromString(entry);
+                    if (name != null && name.flattenToShortString().equals(helper)) listed = true;
+                }
+            }
+            if (!listed) {
+                String updated = list == null || list.isEmpty() || "null".equals(list) ? helper : list + ":" + helper;
+                Settings.Secure.putString(cr, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, updated);
+                android.util.Log.i("ServiceRepair", "the Home key helper was off; turned it back on");
+            }
+            if (Settings.Secure.getInt(cr, Settings.Secure.ACCESSIBILITY_ENABLED, 0) != 1) {
+                Settings.Secure.putInt(cr, Settings.Secure.ACCESSIBILITY_ENABLED, 1);
+            }
+        } catch (RuntimeException ignored) {
+            // The setting is the system's; a refusal leaves the helper as it was.
+        }
+    }
+
+    /**
      * The theme's own_screensaver: keeps the launcher's ClockDream as the system screensaver. Some Google TV builds
      * put their own back (after an update or a reboot); Home starting or coming back sets ours again, when the
      * installer granted WRITE_SECURE_SETTINGS.

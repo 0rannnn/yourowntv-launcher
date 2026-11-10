@@ -419,6 +419,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         // restore_key_services: after a force stop, put back the remote's accessibility helpers that Android took
         // off the list (needs WRITE_SECURE_SETTINGS, granted by build-and-install with RESTORE_KEY_SERVICES=1).
         if (cfg.restoreKeyServices) ServiceRepair.restore(this);
+        if (HeaderExtras.themeFlag(this, "keep_key_helper")) ServiceRepair.keepHomeKey(this);
         settingsRevision = settingsRevision();
         applyViewInputsHandler(cfg.handleViewInputs);
         settingsKeycodes = cfg.settingsKeycodes;
@@ -1041,6 +1042,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         super.onResume();
         RingPulse.resume();
         if (HeaderExtras.themeFlag(this, "own_screensaver")) ServiceRepair.claimScreensaver(this);
+        if (HeaderExtras.themeFlag(this, "keep_key_helper")) ServiceRepair.keepHomeKey(this);
         // The quick settings panel's language button: rebuild Home in the other language.
         if (localeRevision != LauncherLocale.revision) {
             localeRevision = LauncherLocale.revision;
