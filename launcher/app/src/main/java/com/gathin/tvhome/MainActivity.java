@@ -580,6 +580,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         hiddenApps = new HashSet<>(cfg.hiddenApps);
 
         grid = findViewById(R.id.grid);
+        // apps_size / apps_x before the first layout: a single row's tiles take their width from the grid's padding when
+        // they are made, so the padding must be right before then (the layout listener below keeps it right).
+        int[] startSides = appsLayout.sides(getResources().getDisplayMetrics().widthPixels, (int) (10 * density));
+        grid.setPadding(startSides[0], grid.getPaddingTop(), startSides[1], grid.getPaddingBottom());
         rtlAppGrid = getResources().getBoolean(R.bool.rtl_app_grid);
         // Mirror only the app grid; the header and other locales keep their own layouts.
         // single_row: one span laid out sideways, so the same adapter, glass and dock band serve a scrolling row.
@@ -683,6 +687,14 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             int[] sides = appsLayout.sides(r - l, (int) (10 * density));
             if (grid.getPaddingLeft() != sides[0] || grid.getPaddingRight() != sides[1]) {
                 grid.setPadding(sides[0], grid.getPaddingTop(), sides[1], grid.getPaddingBottom());
+            }
+            // A narrower single row scrolls inside its own part of the screen instead of running on to the edge
+            // (the grid draws past its padding for the focus zoom); a little room is kept for the zoom's shadow.
+            if (singleRow && appsLayout.size < 1f) {
+                int room = (int) (16 * density);
+                android.graphics.Rect clip = new android.graphics.Rect(Math.max(0, sides[0] - room), 0,
+                        Math.min(r - l, (r - l) - sides[1] + room), b - t);
+                if (!clip.equals(grid.getClipBounds())) grid.setClipBounds(clip);
             }
             // Item height follows the tile size, which follows the columns and the rows that must fit (AppAdapter.tileWidthPx).
             int inner = (r - l) - grid.getPaddingLeft() - grid.getPaddingRight();

@@ -188,11 +188,11 @@ const COMMON_SHOWS = [
 const LAYOUT_FIELDS = [
   ['apps_size', 'גודל האפליקציות (%)', 50, 100, 5, 100],
   ['columns', 'כמה אפליקציות בשורה', 3, 8, 1, 5],
-  ['apps_x', 'מיקום האפליקציות: שמאל ← → ימין', 0, 100, 5, 50],
-  ['apps_y', 'מיקום האפליקציות: למעלה ← → למטה', -40, 60, 2, 0],
+  ['apps_x', 'מיקום האפליקציות לרוחב (שמאל ↔ ימין)', 0, 100, 5, 50],
+  ['apps_y', 'מיקום האפליקציות לגובה (שמאלה = למעלה)', -40, 60, 2, 0],
   ['clock_size', 'גודל השעון (%)', 40, 250, 5, 100],
-  ['clock_x', 'מיקום השעון: שמאל ← → ימין', -90, 90, 2, 0],
-  ['clock_y', 'מיקום השעון: למעלה ← → למטה', -20, 90, 2, 0],
+  ['clock_x', 'מיקום השעון לרוחב (שמאל ↔ ימין)', -90, 90, 2, 0],
+  ['clock_y', 'מיקום השעון לגובה (שמאלה = למעלה)', -20, 90, 2, 0],
 ];
 
 // Switches every theme may have, shown when the theme's settings have them.
@@ -393,7 +393,7 @@ function renderLayout() {
     wrap.innerHTML = '<span class="lbl"><span></span><b></b></span>';
     wrap.querySelector('.lbl span').textContent = label;
     const out = wrap.querySelector('b');
-    const input = document.createElement('input'); input.type = 'range';
+    const input = document.createElement('input'); input.type = 'range'; input.dir = 'ltr';
     input.min = a; input.max = b; input.step = step; input.value = cfg[key] ?? def; out.textContent = input.value;
     input.oninput = () => { out.textContent = input.value; };
     input.onchange = () => saveNow({ [key]: Number(input.value) });
