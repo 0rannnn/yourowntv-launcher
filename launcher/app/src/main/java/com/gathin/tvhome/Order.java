@@ -98,7 +98,10 @@ final class Order {
      */
     static Map<String, Integer> ranks(Order order, List<String> dockApps) {
         Map<String, Integer> r = new HashMap<>();
-        if (order == null || !order.dock.equals(dockKey(dockApps))) return r;
+        // The owner's order is the same in every theme: it is kept even when a theme's dock_apps differ from the ones
+        // it was saved under (it used to be dropped then, so switching themes changed the order of the apps). Only
+        // how many of them sit in the dock (docked) stays tied to the dock it was saved with.
+        if (order == null) return r;
         for (int i = 0; i < order.keys.size(); i++) r.put(order.keys.get(i), i);
         return r;
     }

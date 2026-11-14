@@ -1,9 +1,16 @@
 package com.gathin.tvhome;
 
+import android.view.animation.Interpolator;
+import android.view.animation.PathInterpolator;
+
 import androidx.dynamicanimation.animation.SpringAnimation;
 import androidx.dynamicanimation.animation.SpringForce;
 
-/** Reduced motion (config.xml reduced_motion): the one spring and the one time limit every animation uses then. */
+/**
+ * The launcher's shared motion: the easing curves every animation uses, so focus, panels and scrolling feel like one
+ * system (and no curve is allocated on each key press), and reduced motion (config.xml reduced_motion): the one spring
+ * and the one time limit every animation uses then.
+ */
 final class Motion {
 
     /** The longest any reduced-motion animation runs, in milliseconds. */
@@ -12,6 +19,18 @@ final class Motion {
     static final float REDUCED_STIFFNESS = 15000f;
     /** The spring stops once it is within this many pixels of its target. */
     static final float REDUCED_MIN_CHANGE = 2f;
+
+    /** Things arriving or growing (focus in, a panel opening): fast start, long soft landing. */
+    static final Interpolator ENTER = new PathInterpolator(0.05f, 0.7f, 0.1f, 1f);
+    /** Things settling back or moving within the screen (focus out, a row scrolling): an even ease out. */
+    static final Interpolator SETTLE = new PathInterpolator(0.2f, 0f, 0f, 1f);
+    /** Things leaving (a panel closing): gathers speed, gone before it drags. */
+    static final Interpolator EXIT = new PathInterpolator(0.3f, 0f, 0.8f, 0.15f);
+
+    /** How long a row's scroll to the focused tile takes: longer for longer moves, within 220 to 380 ms. */
+    static int scrollMs(int distancePx, float density) {
+        return Math.round(Math.max(220f, Math.min(380f, 220f + Math.abs(distancePx) / density * 0.35f)));
+    }
 
     private Motion() {
     }

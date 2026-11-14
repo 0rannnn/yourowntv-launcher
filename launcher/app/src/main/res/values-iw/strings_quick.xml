@@ -6,6 +6,10 @@
     <string name="qs_accessibility">נגישות</string>
     <string name="qs_keystone">תיקון טרפז</string>
     <string name="qs_launcher">מסך הבית</string>
+    <string name="qs_phone_edit">מהטלפון</string>
+    <string name="qs_phone_title">עריכת הטלוויזיה מהטלפון</string>
+    <string name="qs_phone_steps">סורקים את הקוד במצלמה של הטלפון (באותה רשת Wi-Fi), ואז מקלידים את הקוד:</string>
+    <string name="qs_phone_unavailable">עורך הטלפון לא נפתח. להפעיל מחדש את הטלוויזיה ולנסות שוב.</string>
     <string name="qs_bt_devices">מכשירי בלוטות\'</string>
     <string name="qs_connected">מחובר</string>
     <string name="qs_not_connected">לא מחובר</string>

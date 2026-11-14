@@ -108,6 +108,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     static final String ACTION_VIEW_INPUTS = "com.android.tv.action.VIEW_INPUTS";
     /** Sent by QuickSettingsActivity's Reorder toggle: start moving the apps, as the top bar's Reorder button does. */
     static final String ACTION_REORDER = "com.gathin.tvhome.action.REORDER";
+    /** The quick panel opened straight on "Edit from the phone" (its QR code and 4-digit code). */
+    static final String ACTION_PHONE_EDIT = "com.gathin.tvhome.action.PHONE_EDIT";
     /** Tiles per row and dock slots (res/values/config.xml, columns). Set in onCreate. */
     static int COLUMNS = 4;
     private boolean rtlAppGrid;
@@ -606,7 +608,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                     else dx = 0;
                     if (dx == 0) return false;
                     if (immediate || reducedMotion || !animations) parent.scrollBy(dx, 0);
-                    else parent.smoothScrollBy(dx, 0);
+                    else parent.smoothScrollBy(dx, 0, Motion.SETTLE, Motion.scrollMs(dx, density));
                     return true;
                 }
                 if (dockRow && getPosition(child) < COLUMNS) return false;
@@ -625,7 +627,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 else dy = Math.min(top, bottom - limitBottom);
                 if (dy == 0) return false;
                 if (immediate || reducedMotion || !animations) parent.scrollBy(0, dy);
-                else parent.smoothScrollBy(0, dy);
+                else parent.smoothScrollBy(0, dy, Motion.SETTLE, Motion.scrollMs(dy, density));
                 return true;
             }
         });
@@ -927,7 +929,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                     .build(), vpnCallback);
         }
         // Not after recreate(): the launch intent survives it and would open the settings again.
-        if (savedInstanceState == null && !openLauncherSettingsIfAsked(getIntent()) && !openReorderIfAsked(getIntent())) {
+        if (savedInstanceState == null && !openLauncherSettingsIfAsked(getIntent()) && !openReorderIfAsked(getIntent())
+                && !openPhoneEditIfAsked(getIntent())) {
             openInputsIfAsked(getIntent());
         }
     }
@@ -992,6 +995,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         return true;
     }
 
+    private boolean openPhoneEditIfAsked(Intent intent) {
+        if (intent == null || !ACTION_PHONE_EDIT.equals(intent.getAction())) return false;
+        setIntent(new Intent(Intent.ACTION_MAIN));
+        startActivity(new Intent(this, QuickSettingsActivity.class).putExtra(QuickSettingsActivity.EXTRA_PHONE_EDIT, true));
+        return true;
+    }
+
     private boolean openLauncherSettingsIfAsked(Intent intent) {
         if (intent == null || !ACTION_LAUNCHER_SETTINGS.equals(intent.getAction())) return false;
         setIntent(new Intent(Intent.ACTION_MAIN));
@@ -1010,6 +1020,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (openLauncherSettingsIfAsked(intent)) return;
         if (openInputsIfAsked(intent)) return;
         if (openReorderIfAsked(intent)) return;
+        if (openPhoneEditIfAsked(intent)) return;
         if (intent == null || !intent.hasCategory(Intent.CATEGORY_HOME)) return;
         grid.scrollToPosition(0);
         lastFocused = 0;
@@ -1040,6 +1051,12 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     @Override
     protected void onResume() {
         super.onResume();
+        // Edit from the phone (PhoneEditor): running whenever Home is, so a paired phone can change things any time;
+        // a change made while Home is on screen rebuilds it at once.
+        PhoneEditor.start(this);
+        PhoneEditor.onChange = () -> runOnUiThread(() -> {
+            if (!isFinishing()) recreate();
+        });
         RingPulse.resume();
         if (HeaderExtras.themeFlag(this, "own_screensaver")) ServiceRepair.claimScreensaver(this);
         if (HeaderExtras.themeFlag(this, "keep_key_helper")) ServiceRepair.keepHomeKey(this);
@@ -1264,6 +1281,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     @Override
     protected void onPause() {
         super.onPause();
+        PhoneEditor.onChange = null;
         RingPulse.pause();
         if (navSound != null) navSound.restoreSystemTick();
         root.removeCallbacks(showIdleClock);
@@ -1853,7 +1871,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             boolean scroll = !singleRow && Math.abs(dy) > (int) (8 * density);
             if (scroll) {
                 if (!animations || reducedMotion) grid.scrollBy(0, dy);
-                else grid.smoothScrollBy(0, dy);
+                else grid.smoothScrollBy(0, dy, Motion.SETTLE, Motion.scrollMs(dy, density));
             }
             if (sw != null) sw.focused(card);
             showHero(position, scroll ? r.top - dy : r.top);
@@ -2146,6 +2164,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         ambient.animate().alpha(1f).setDuration(180).start();
         ambientAnimator = ValueAnimator.ofObject(new ArgbEvaluator(), ambientColor, color);
         ambientAnimator.setDuration(360);
+        ambientAnimator.setInterpolator(Motion.SETTLE);
         ambientAnimator.addUpdateListener(animation -> setAmbient((int) animation.getAnimatedValue()));
         ambientAnimator.start();
     }

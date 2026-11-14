@@ -15,7 +15,6 @@ import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewOutlineProvider;
-import android.view.animation.DecelerateInterpolator;
 import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
@@ -144,7 +143,7 @@ final class PanelPicker {
         box.setScaleX(0.96f);
         box.setScaleY(0.96f);
         box.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(260)
-                .setInterpolator(new DecelerateInterpolator(2f)).start();
+                .setInterpolator(Motion.ENTER).start();
         View first = focus;
         box.post(() -> first.requestFocus());
     }

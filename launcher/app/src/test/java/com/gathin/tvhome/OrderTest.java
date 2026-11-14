@@ -86,10 +86,15 @@ public class OrderTest {
     }
 
     @Test
-    public void changedDockAppsDropTheSavedOrder() {
+    public void theSavedOrderHoldsInEveryTheme() {
+        // A theme with other dock_apps keeps the owner's order (the same order in every theme)...
         Order o = new Order(Order.dockKey(DOCK), Arrays.asList("b/.B", "a/.A"));
-        assertTrue(Order.ranks(o, Arrays.asList("com.netflix.ninja", "com.plexapp.android")).isEmpty());
-        assertTrue(Order.ranks(o, Collections.singletonList("com.plexapp.android")).isEmpty());
+        Map<String, Integer> other = Order.ranks(o, Arrays.asList("com.netflix.ninja", "com.plexapp.android"));
+        assertEquals(Integer.valueOf(0), other.get("b/.B"));
+        assertEquals(Integer.valueOf(1), other.get("a/.A"));
+        // ...but how many sit in the dock stays tied to the dock it was saved with.
+        assertEquals(-1, Order.docked(new Order(Order.dockKey(DOCK), Arrays.asList("b/.B"), 1),
+                Collections.singletonList("com.plexapp.android")));
         assertTrue(Order.ranks(null, DOCK).isEmpty());
     }
 

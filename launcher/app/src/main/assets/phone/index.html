@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#101218">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>עריכת מסך הבית</title>
+<style>
+  :root { --bg: #f2f2f7; --card: #ffffff; --text: #1c1c1e; --dim: #6e6e73; --line: #e5e5ea; --accent: #0a84ff;
+          --green: #30b158; --red: #ff3b30; --field: #f2f2f7; --shadow: 0 1px 2px rgba(0,0,0,.06); }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #000000; --card: #1c1c1e; --text: #f2f2f7; --dim: #98989f; --line: #2c2c2e; --field: #2c2c2e;
+            --green: #30d158; --red: #ff453a; --shadow: none; }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 16px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Rubik, Roboto, sans-serif; }
+  main { max-width: 640px; margin: 0 auto; padding: calc(16px + env(safe-area-inset-top)) 16px calc(110px + env(safe-area-inset-bottom)); }
+  h1 { font-size: 28px; margin: 6px 4px 2px; letter-spacing: -.01em; }
+  .sub { color: var(--dim); margin: 0 4px 18px; font-size: 15px; }
+  h2 { font-size: 13px; font-weight: 600; color: var(--dim); text-transform: uppercase; letter-spacing: .04em; margin: 26px 16px 8px; }
+  .card { background: var(--card); border-radius: 16px; padding: 4px 16px; box-shadow: var(--shadow); }
+  .row { display: flex; align-items: center; gap: 12px; min-height: 52px; border-bottom: 1px solid var(--line); padding: 8px 0; }
+  .row:last-child { border-bottom: 0; }
+  .row > span { flex: 1; }
+  label.field { display: block; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  label.field:last-child { border-bottom: 0; }
+  label.field .lbl { display: flex; justify-content: space-between; color: var(--dim); font-size: 14px; margin-bottom: 6px; }
+  input[type=text], input[type=search] { width: 100%; font: inherit; font-size: 17px; color: var(--text); background: var(--field);
+         border: 0; border-radius: 10px; padding: 11px 12px; outline: none; }
+  input[type=text]:focus, input[type=search]:focus { box-shadow: 0 0 0 2px var(--accent); }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  input[type=color] { width: 48px; height: 32px; border: 0; background: none; padding: 0; }
+  .switch { position: relative; width: 51px; height: 31px; flex: none; }
+  .switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+  .switch i { position: absolute; inset: 0; background: var(--line); border-radius: 31px; transition: background .2s; }
+  .switch i::after { content: ""; position: absolute; top: 2px; right: 2px; width: 27px; height: 27px; border-radius: 50%;
+         background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,.25); transition: transform .25s cubic-bezier(.2,.8,.2,1); }
+  .switch input:checked + i { background: var(--green); }
+  .switch input:checked + i::after { transform: translateX(-20px); }
+  button { font: inherit; border: 0; cursor: pointer; }
+  .btn { background: var(--accent); color: #fff; font-weight: 600; font-size: 17px; border-radius: 14px; padding: 14px 18px; width: 100%; }
+  .btn.ghost { background: var(--field); color: var(--accent); }
+  .btn:disabled { opacity: .5; }
+  .themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; padding: 12px 0; }
+  .theme { position: relative; border-radius: 14px; overflow: hidden; aspect-ratio: 16/10; background: var(--field) center/cover; color: #fff;
+           border: 3px solid transparent; text-align: start; padding: 0; }
+  .theme span { position: absolute; inset: auto 0 0 0; padding: 22px 10px 8px; font-weight: 600; font-size: 15px;
+                background: linear-gradient(transparent, rgba(0,0,0,.7)); }
+  .theme.on { border-color: var(--accent); }
+  .walls { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px; padding: 12px 0; }
+  .wall { position: relative; aspect-ratio: 16/9; border-radius: 10px; background: var(--field) center/cover; }
+  .wall button { position: absolute; top: 4px; left: 4px; width: 28px; height: 28px; border-radius: 50%; background: rgba(0,0,0,.6);
+                 color: #fff; font-size: 16px; line-height: 28px; padding: 0; }
+  .add { display: block; text-align: center; padding: 13px; border-radius: 12px; background: var(--field); color: var(--accent);
+         font-weight: 600; margin: 4px 0 12px; cursor: pointer; }
+  .add input { display: none; }
+  .results button { display: block; width: 100%; text-align: start; padding: 12px; margin: 6px 0; border-radius: 10px; background: var(--field); color: var(--text); }
+  .place { color: var(--green); font-weight: 600; padding: 6px 0 12px; }
+  .bar { position: fixed; inset: auto 0 0 0; padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+         background: color-mix(in srgb, var(--bg) 82%, transparent); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+         border-top: 1px solid var(--line); }
+  .bar .in { max-width: 640px; margin: 0 auto; }
+  #toast { position: fixed; top: calc(14px + env(safe-area-inset-top)); left: 50%; transform: translate(-50%, -30px); opacity: 0;
+           background: var(--text); color: var(--bg); padding: 10px 18px; border-radius: 20px; font-weight: 600; font-size: 15px;
+           transition: all .3s cubic-bezier(.2,.8,.2,1); z-index: 9; pointer-events: none; max-width: 90vw; text-align: center; }
+  #toast.on { transform: translate(-50%, 0); opacity: 1; }
+  .pair { min-height: 80vh; display: flex; flex-direction: column; justify-content: center; text-align: center; }
+  .pair h1 { margin-bottom: 8px; }
+  .digits { display: flex; gap: 12px; justify-content: center; direction: ltr; margin: 26px 0 18px; }
+  .digits input { width: 58px; height: 70px; font-size: 32px; text-align: center; border-radius: 14px; border: 0; background: var(--card);
+                  color: var(--text); box-shadow: var(--shadow), inset 0 0 0 1px var(--line); outline: none; font-weight: 600; }
+  .digits input:focus { box-shadow: 0 0 0 2px var(--accent); }
+  .err { color: var(--red); min-height: 22px; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div id="toast"></div>
+
+<main id="pairView" class="pair hidden">
+  <h1>עריכת מסך הבית</h1>
+  <p class="sub">מקלידים את 4 הספרות שמופיעות בטלוויזיה.</p>
+  <div class="digits" id="digits">
+    <input inputmode="numeric" maxlength="1" autocomplete="one-time-code" aria-label="ספרה 1">
+    <input inputmode="numeric" maxlength="1" aria-label="ספרה 2">
+    <input inputmode="numeric" maxlength="1" aria-label="ספרה 3">
+    <input inputmode="numeric" maxlength="1" aria-label="ספרה 4">
+  </div>
+  <div class="err" id="pairErr"></div>
+</main>
+
+<main id="editView" class="hidden">
+  <h1>מסך הבית</h1>
+  <p class="sub" id="tvName"></p>
+
+  <h2>ערכת נושא</h2>
+  <div class="card"><div class="themes" id="themes"></div></div>
+
+  <h2>השם שלך</h2>
+  <div class="card">
+    <label class="field"><span class="lbl"><span>באנגלית</span></span><input type="text" id="nameEn" dir="ltr" autocomplete="given-name"></label>
+    <label class="field"><span class="lbl"><span>בעברית</span></span><input type="text" id="nameHe" dir="rtl"></label>
+  </div>
+
+  <h2>מיקום (בשביל מזג האוויר)</h2>
+  <div class="card">
+    <div class="place" id="place"></div>
+    <label class="field"><input type="search" id="city" placeholder="עיר או יישוב" enterkeyhint="search"></label>
+    <div class="results" id="results"></div>
+  </div>
+
+  <h2>תמונות רקע</h2>
+  <div class="card">
+    <div class="walls" id="walls"></div>
+    <label class="add">+ הוספת תמונות מהטלפון<input type="file" id="photos" accept="image/*" multiple></label>
+  </div>
+
+  <h2>הגדרות הערכה</h2>
+  <div class="card" id="settings"></div>
+</main>
+
+<div class="bar hidden" id="bar"><div class="in"><button class="btn" id="save" disabled>שמירה בטלוויזיה</button></div></div>
+
+<script>
+// The theme settings, as the computer editor has them (wallpaper-editor/editor.html).
+const PS5_FIELDS = [
+  ['range', 'ps5_columns', 'כמה אייקונים בשורה (פחות = גדולים יותר)', 5, 12, 1, 9],
+  ['range', 'ps5_zoom', 'הגדלת האייקון המסומן', 1, 1.6, 0.05, 1.3],
+  ['range', 'ps5_title_size', 'גודל הכותרת', 20, 72, 1, 40],
+  ['range', 'ps5_scrim', 'הצללה מעל הרקע (%)', 0, 100, 5, 100],
+  ['text', 'ps5_tab_apps', 'שם הלשונית הראשונה (ריק = "אפליקציות")'],
+  ['text', 'ps5_tab_library', 'שם הלשונית השנייה (ריק = "ספרייה")'],
+  ['color', 'ps5_avatar_color', 'צבע עיגול הפרופיל', '#3B7BFF'],
+];
+const PS5_SHOWS = [
+  ['ps5_show_buttons', 'חמשת הכפתורים (כניסות, Wi-Fi, בלוטות\', סידור, הגדרות)'], ['ps5_show_search', 'חיפוש'],
+  ['ps5_show_avatar', 'עיגול הפרופיל'], ['ps5_show_clock', 'שעון'], ['ps5_show_blurb', 'שורת התיאור מתחת לשם'],
+  ['ps5_show_last_opened', '"פתיחה אחרונה" מעל השם'],
+];
+const SWITCH_FIELDS = [
+  ['range', 'switch_columns', 'כמה אייקונים בשורה (פחות = גדולים יותר)', 3, 8, 1, 5],
+  ['color', 'switch_accent', 'צבע המסגרת סביב האייקון המסומן', '#19B8E6'],
+  ['color', 'switch_title_color', 'צבע השם מעל האייקון', '#2F6FD6'],
+  ['color', 'switch_avatar_color', 'צבע עיגול הפרופיל', '#E60012'],
+];
+const SWITCH_SHOWS = [
+  ['switch_dark', 'מצב כהה (שחור במקום בהיר)', false], ['switch_show_buttons', 'חמשת הכפתורים בשורה התחתונה'],
+  ['switch_show_avatar', 'עיגול הפרופיל'], ['switch_show_clock', 'שעון ו-Wi-Fi'],
+  ['switch_show_title', 'שם האפליקציה מעל האייקון'], ['switch_show_hint', 'הסימנים בפינות (OK ושלט)'],
+];
+const DS_FIELDS = [
+  ['range', 'ds_columns', 'גודל אייקונים התחלתי: כמה בשורה (בחלונית יש סליידר שגובר על זה)', 4, 10, 1, 6],
+  ['color', 'ds_accent', 'צבע המסגרת סביב האייקון המסומן', '#FF2E9A'],
+];
+const DS_SHOWS = [
+  ['ds_show_buttons', 'חמשת הכפתורים בפס העליון'], ['ds_show_search', 'חיפוש'],
+  ['ds_show_clock', 'שעון בפינה'], ['ds_show_bottom', 'הפס התחתון עם שם האפליקציה'],
+];
+const COMMON_FIELDS = [
+  ['text', 'greeting_name', 'השם באנגלית (ברכה / אות בפרופיל)'],
+  ['text', 'greeting_name_he', 'השם בעברית'],
+  ['color', 'background_color', 'צבע רקע (מתחת לתמונות)', '#000000'],
+  ['range', 'wallpaper_rotation_minutes', 'רקע מתחלף כל כמה דקות (0 = קבוע)', 0, 30, 1, 3],
+  // TCL / Google TV: Google's Home stays as the system's Home, and the remote's Home key sends it back here.
+  ['text', 'stock_home_redirect', 'מסך הבית של היצרן שנשאר (TCL / Google TV, האשף ממלא לבד; ריק = אין)'],
+];
+// The remote and the TV, the same in every theme.
+const COMMON_SHOWS = [
+  ['keep_key_helper', 'כפתור ההגדרות בשלט תמיד עובד (מחזיר את העוזר אחרי הפעלה מחדש)'],
+  ['own_screensaver', 'שומר המסך של הערכה במקום של Google'],
+  ['consume_volume_keys', 'החזקת ווליום מעלה/מורידה ברצף (העוזר חוזר על הלחיצה)', false],
+];
+
+
+// Switches every theme may have, shown when the theme's settings have them.
+const GENERAL_SHOWS = [
+  ['center_clock', 'שעון גדול במרכז'], ['single_row', 'שורת אפליקציות אחת'], ['recent_apps', 'אפליקציות אחרונות מעל השורה'],
+  ['icon_only_buttons', 'כפתורים עליונים עם אייקון בלבד'], ['dock_glass', 'פס זכוכית מתחת לאפליקציות'],
+  ['vision_panel', 'חלונית ההגדרות בסגנון visionOS'], ['focus_overshoot', 'קפיצה קטנה כשמסמנים אפליקציה'],
+  ['uniform_tiles', 'כל האפליקציות באותו סגנון'], ['square_tiles', 'אריחים מרובעים'], ['wallpaper', 'תמונות רקע'],
+  ['dock_title', 'שם מעל שורת האפליקציות'], ['reorder_button', 'כפתור סידור אפליקציות'],
+];
+
+const $ = id => document.getElementById(id);
+const KEY = 'tvhome-token-' + location.host;
+let token = '';
+try { token = localStorage.getItem(KEY) || ''; } catch (e) {}
+let state = null, changes = {};
+
+function toast(text) {
+  const t = $('toast'); t.textContent = text; t.classList.add('on');
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => t.classList.remove('on'), 2400);
+}
+async function api(path, body, raw) {
+  const opt = { method: body === undefined ? 'GET' : 'POST', headers: { 'X-Token': token } };
+  if (body !== undefined) { opt.body = raw ? body : JSON.stringify(body); opt.headers['Content-Type'] = raw ? 'image/jpeg' : 'application/json'; }
+  const r = await fetch(path, opt);
+  if (r.status === 401) { token = ''; try { localStorage.removeItem(KEY); } catch (e) {} showPair(); throw new Error('צריך להתחבר מחדש'); }
+  const j = await r.json();
+  if (!r.ok || j.error) throw new Error(j.error || 'הטלוויזיה לא ענתה');
+  return j;
+}
+
+// ---- pairing ---------------------------------------------------------------------------------------------
+function showPair() {
+  $('pairView').classList.remove('hidden'); $('editView').classList.add('hidden'); $('bar').classList.add('hidden');
+  const boxes = [...$('digits').children];
+  boxes.forEach(b => b.value = '');
+  setTimeout(() => boxes[0].focus(), 200);
+}
+(() => {
+  const boxes = [...$('digits').children];
+  boxes.forEach((b, i) => {
+    b.addEventListener('input', () => {
+      const v = b.value.replace(/\D/g, '');
+      if (v.length > 1) { v.split('').slice(0, 4).forEach((d, k) => { if (boxes[k]) boxes[k].value = d; }); }
+      else b.value = v;
+      const next = boxes.find(x => !x.value);
+      if (next) next.focus(); else tryPair();
+    });
+    b.addEventListener('keydown', e => { if (e.key === 'Backspace' && !b.value && i > 0) boxes[i - 1].focus(); });
+  });
+})();
+async function tryPair() {
+  const code = [...$('digits').children].map(b => b.value).join('');
+  if (code.length !== 4) return;
+  $('pairErr').textContent = '';
+  try {
+    const r = await fetch('/api/pair', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || 'הקוד לא נכון');
+    token = j.token;
+    try { localStorage.setItem(KEY, token); } catch (e) {}
+    load();
+  } catch (e) {
+    $('pairErr').textContent = e.message;
+    [...$('digits').children].forEach(b => b.value = '');
+    $('digits').children[0].focus();
+  }
+}
+
+// ---- the editor ------------------------------------------------------------------------------------------
+async function load() {
+  try { state = await api('/api/state'); } catch (e) { if (token) toast(e.message); return; }
+  changes = {};
+  $('pairView').classList.add('hidden'); $('editView').classList.remove('hidden'); $('bar').classList.remove('hidden');
+  $('save').disabled = true;
+  const cfg = state.config;
+  $('tvName').textContent = state.tv;
+  $('nameEn').value = cfg.greeting_name || '';
+  $('nameHe').value = cfg.greeting_name_he || '';
+  showPlace(cfg.location_label_he || cfg.location_label || '');
+  renderThemes(); renderWalls(); renderSettings();
+}
+function change(key, value) { changes[key] = value; $('save').disabled = false; }
+$('nameEn').oninput = e => change('greeting_name', e.target.value.trim());
+$('nameHe').oninput = e => change('greeting_name_he', e.target.value.trim());
+
+function renderThemes() {
+  const box = $('themes'); box.innerHTML = '';
+  if (state.themes.length < 2) { box.parentElement.previousElementSibling.classList.add('hidden'); box.parentElement.classList.add('hidden'); return; }
+  for (const t of state.themes) {
+    const b = document.createElement('button');
+    b.className = 'theme' + (t.active ? ' on' : '');
+    if (t.cover) b.style.backgroundImage = `url(/api/wallpaper?slot=${encodeURIComponent(t.slot)}&name=${encodeURIComponent(t.cover)}&t=${token})`;
+    b.innerHTML = '<span></span>'; b.firstChild.textContent = t.name_he || t.name;
+    b.onclick = async () => {
+      if (t.active) return;
+      if (Object.keys(changes).length && !confirm('יש שינויים שלא נשמרו. להחליף ערכה בלי לשמור?')) return;
+      try { await api('/api/theme', { slot: t.slot }); toast('הערכה הוחלפה'); load(); } catch (e) { toast(e.message); }
+    };
+    box.append(b);
+  }
+}
+
+function renderWalls() {
+  const box = $('walls'); box.innerHTML = '';
+  for (const name of state.wallpapers) {
+    const d = document.createElement('div');
+    d.className = 'wall';
+    d.style.backgroundImage = `url(/api/wallpaper?name=${encodeURIComponent(name)}&t=${token})`;
+    const x = document.createElement('button'); x.textContent = '×'; x.setAttribute('aria-label', 'הסרה');
+    x.onclick = async () => {
+      if (!confirm('להסיר את התמונה מהערכה?')) return;
+      try { await api('/api/wallpaper/delete', { name }); d.remove(); state.wallpapers = state.wallpapers.filter(n => n !== name); toast('הוסרה'); }
+      catch (e) { toast(e.message); }
+    };
+    d.append(x); box.append(d);
+  }
+}
+
+// A photo made exactly 1920x1080, cropped from the middle as a wallpaper fills the screen.
+function toWallpaper(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      const W = 1920, H = 1080, k = Math.max(W / img.naturalWidth, H / img.naturalHeight);
+      const c = document.createElement('canvas'); c.width = W; c.height = H;
+      const g = c.getContext('2d'); g.imageSmoothingQuality = 'high';
+      g.drawImage(img, (W - img.naturalWidth * k) / 2, (H - img.naturalHeight * k) / 2, img.naturalWidth * k, img.naturalHeight * k);
+      URL.revokeObjectURL(url);
+      c.toBlob(b => b ? resolve(b) : reject(new Error('לא הצלחתי לעבד את התמונה')), 'image/jpeg', 0.88);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('את התמונה הזאת הדפדפן לא יודע לפתוח')); };
+    img.src = url;
+  });
+}
+$('photos').onchange = async e => {
+  const files = [...e.target.files]; e.target.value = '';
+  let sent = 0;
+  for (const f of files) {
+    toast(`שולח ${sent + 1} מתוך ${files.length}…`);
+    try { await api('/api/wallpaper', await toWallpaper(f), true); sent++; } catch (err) { toast(err.message); }
+  }
+  if (sent) { toast(`✓ ${sent} תמונות נוספו`); const s = await api('/api/state'); state.wallpapers = s.wallpapers; renderWalls(); }
+};
+
+// ---- the place -------------------------------------------------------------------------------------------
+function showPlace(text) { $('place').textContent = text ? '📍 ' + text : ''; }
+async function geo(name, lang) {
+  const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?count=5&language=${lang}&name=${encodeURIComponent(name)}`);
+  return (await r.json()).results || [];
+}
+async function geoById(id, lang) {
+  try { return await (await fetch(`https://geocoding-api.open-meteo.com/v1/get?id=${id}&language=${lang}`)).json(); } catch (e) { return null; }
+}
+let searchTimer;
+$('city').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(search, 450); });
+$('city').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); clearTimeout(searchTimer); search(); } });
+async function search() {
+  const q = $('city').value.trim(), box = $('results');
+  if (q.length < 2) { box.innerHTML = ''; return; }
+  try {
+    const [he, en] = await Promise.all([geo(q, 'he'), geo(q, 'en')]);
+    const first = he.length ? he : en;
+    box.innerHTML = '';
+    for (const r of first.slice(0, 4)) {
+      const h = he.find(x => x.id === r.id) || await geoById(r.id, 'he') || r;
+      const e = en.find(x => x.id === r.id) || await geoById(r.id, 'en') || h;
+      const heName = h.name + (h.country ? ', ' + h.country : ''), enName = e.name + (e.country ? ', ' + e.country : '');
+      const b = document.createElement('button');
+      b.textContent = heName + (h.admin1 ? ` (${h.admin1})` : '');
+      b.onclick = () => {
+        change('location_label', enName); change('location_label_he', heName);
+        change('weather_lat', Math.round(r.latitude * 1000) / 1000); change('weather_lon', Math.round(r.longitude * 1000) / 1000);
+        showPlace(heName); box.innerHTML = ''; $('city').value = ''; $('city').blur();
+      };
+      box.append(b);
+    }
+    if (!first.length) box.innerHTML = '<p class="sub">לא נמצא. לנסות שם אחר.</p>';
+  } catch (e) { box.innerHTML = '<p class="sub">אין חיבור לאינטרנט</p>'; }
+}
+
+// ---- the theme's own settings ----------------------------------------------------------------------------
+function renderSettings() {
+  const cfg = state.config, box = $('settings'); box.innerHTML = '';
+  const ps5 = !!cfg.ps5_home, nx = !!cfg.switch_home, n3 = !!cfg.ds_home;
+  const fields = (ps5 ? PS5_FIELDS : nx ? SWITCH_FIELDS : n3 ? DS_FIELDS : [])
+    .concat(COMMON_FIELDS.filter(f => !['greeting_name', 'greeting_name_he', 'stock_home_redirect'].includes(f[1])));
+  for (const [type, key, label, a, b, step, def] of fields) {
+    const wrap = document.createElement('label'); wrap.className = 'field';
+    wrap.innerHTML = '<span class="lbl"><span></span><b></b></span>';
+    wrap.querySelector('.lbl span').textContent = label;
+    const out = wrap.querySelector('b');
+    const input = document.createElement('input'); input.type = type;
+    if (type === 'range') {
+      input.min = a; input.max = b; input.step = step; input.value = cfg[key] ?? def; out.textContent = input.value;
+      input.oninput = () => { out.textContent = input.value; change(key, Number(input.value)); };
+    } else if (type === 'color') {
+      input.value = /^#[0-9a-f]{6}$/i.test(cfg[key] || '') ? cfg[key] : a;
+      input.oninput = () => change(key, input.value.toUpperCase());
+    } else {
+      input.value = cfg[key] ?? ''; input.oninput = () => change(key, input.value);
+    }
+    wrap.append(input); box.append(wrap);
+  }
+  const shows = (ps5 ? PS5_SHOWS : nx ? SWITCH_SHOWS : n3 ? DS_SHOWS : [])
+    .concat(GENERAL_SHOWS.filter(([k]) => typeof cfg[k] === 'boolean'), COMMON_SHOWS);
+  for (const [key, label, def] of shows) {
+    const row = document.createElement('div'); row.className = 'row';
+    row.innerHTML = '<span></span><label class="switch"><input type="checkbox"><i></i></label>';
+    row.firstChild.textContent = label;
+    const input = row.querySelector('input');
+    input.checked = cfg[key] ?? (def ?? true);
+    input.onchange = () => change(key, input.checked);
+    box.append(row);
+  }
+}
+
+$('save').onclick = async () => {
+  if (!Object.keys(changes).length) return;
+  $('save').disabled = true; $('save').textContent = 'שומר…';
+  try { await api('/api/config', changes); toast('✓ נשמר בטלוויזיה'); await load(); }
+  catch (e) { toast(e.message); $('save').disabled = false; }
+  $('save').textContent = 'שמירה בטלוויזיה';
+};
+
+if (token) load(); else showPair();
+</script>
+</body>
+</html>

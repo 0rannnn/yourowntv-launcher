@@ -7,6 +7,10 @@
     <string name="qs_accessibility">Accessibility</string>
     <string name="qs_keystone">Keystone</string>
     <string name="qs_launcher">Launcher</string>
+    <string name="qs_phone_edit">Phone</string>
+    <string name="qs_phone_title">Edit this TV from your phone</string>
+    <string name="qs_phone_steps">Scan the code with the phone\'s camera (same Wi-Fi), then type this code:</string>
+    <string name="qs_phone_unavailable">The phone editor could not start. Restart the TV and try again.</string>
     <string name="qs_bt_devices">Bluetooth devices</string>
     <string name="qs_connected">Connected</string>
     <string name="qs_not_connected">Not connected</string>

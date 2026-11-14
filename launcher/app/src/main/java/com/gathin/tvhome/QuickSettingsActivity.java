@@ -33,8 +33,6 @@ import android.view.ViewOutlineProvider;
 import android.widget.ProgressBar;
 import android.view.Gravity;
 import android.view.ViewGroup;
-import android.view.animation.AccelerateInterpolator;
-import android.view.animation.DecelerateInterpolator;
 import android.view.KeyEvent;
 import android.view.View;
 import android.widget.FrameLayout;
@@ -64,6 +62,8 @@ import java.util.Set;
 public final class QuickSettingsActivity extends Activity {
     private static final String TV_SETTINGS = "com.android.tv.settings";
     private static final String TAG = "QuickSettings";
+    /** Open straight on "Edit from the phone" (MainActivity.ACTION_PHONE_EDIT). */
+    static final String EXTRA_PHONE_EDIT = "phone_edit";
     private static final String SPOTIFY = "com.spotify.tv.android";
     private static final String SPOTIFY_LIBRARY = "com.spotify.androidtv.medialibraryservice.AndroidTvMediaLibraryService";
     private static final String SPOTIFY_BUTTONS = "androidx.media3.session.MediaButtonReceiver";
@@ -157,6 +157,9 @@ public final class QuickSettingsActivity extends Activity {
         }
         addTile(tiles, R.drawable.ic_apps, getString(R.string.quick_apps), getString(R.string.quick_apps_hint),
                 listOf(SystemSettings.intent(this, Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS)));
+        // Edit from the phone: a QR code and a 4-digit code, in place of the panel (PhoneEditor).
+        View phone = addTile(tiles, R.drawable.ic_phone_edit, getString(R.string.qs_phone_edit), null, null);
+        phone.setOnClickListener(v -> showPhoneCard());
         // Through Home, so it rebuilds with the new choices when Launcher settings closes.
         addTile(tiles, R.drawable.ic_home_settings, getString(R.string.qs_launcher), null,
                 listOf(new Intent(this, MainActivity.class).setAction(MainActivity.ACTION_LAUNCHER_SETTINGS)));
@@ -232,6 +235,7 @@ public final class QuickSettingsActivity extends Activity {
             tiles.getChildAt(0).requestFocus();
         }
         if (entering) animatePanel(true, null);
+        if (getIntent().getBooleanExtra(EXTRA_PHONE_EDIT, false)) findViewById(R.id.scrim).post(this::showPhoneCard);
     }
 
     /**
@@ -575,8 +579,125 @@ public final class QuickSettingsActivity extends Activity {
     }
 
     /** Back: a picker returns to the panel; the panel slides out the way it came in, then closes. */
+    /** The "Edit from the phone" card on screen, in place of the panel; Back closes it. */
+    private View phoneCard;
+
+    /**
+     * Edit from the phone: the panel steps aside for one glass card with a QR code (this TV's address, opening the
+     * phone page PhoneEditor sends) and a new 4-digit code to type on the phone. Scanning and typing are the whole
+     * pairing: no IP address to type, no computer.
+     */
+    private void showPhoneCard() {
+        PhoneEditor editor = PhoneEditor.start(this);
+        if (editor == null) {
+            Toast.makeText(this, R.string.qs_phone_unavailable, Toast.LENGTH_LONG).show();
+            return;
+        }
+        String code = editor.newCode();
+        String url = editor.url();
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setGravity(Gravity.CENTER_HORIZONTAL);
+        card.setBackgroundResource(R.drawable.vision_card);
+        card.setPadding(dp(32), dp(26), dp(32), dp(26));
+        card.setElevation(dp(16));
+        TextView title = new TextView(this);
+        title.setText(R.string.qs_phone_title);
+        title.setTextColor(getColor(R.color.text_primary));
+        title.setTextSize(20);
+        title.setTypeface(UiFont.get(this, R.string.font_medium));
+        title.setGravity(Gravity.CENTER);
+        card.addView(title);
+        ImageView qr = new ImageView(this);
+        qr.setImageBitmap(qrCode(url, 420));
+        qr.setBackgroundColor(0xFFFFFFFF);
+        qr.setPadding(dp(8), dp(8), dp(8), dp(8));
+        LinearLayout.LayoutParams qrLp = new LinearLayout.LayoutParams(dp(190), dp(190));
+        qrLp.topMargin = dp(16);
+        card.addView(qr, qrLp);
+        TextView steps = new TextView(this);
+        steps.setText(R.string.qs_phone_steps);
+        steps.setTextColor(getColor(R.color.vision_text));
+        steps.setTextSize(13);
+        steps.setGravity(Gravity.CENTER);
+        steps.setMaxWidth(dp(300));
+        LinearLayout.LayoutParams stepsLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        stepsLp.topMargin = dp(14);
+        card.addView(steps, stepsLp);
+        TextView digits = new TextView(this);
+        digits.setText(code.charAt(0) + " " + code.charAt(1) + " " + code.charAt(2) + " " + code.charAt(3));
+        digits.setTextColor(getColor(R.color.text_primary));
+        digits.setTextSize(44);
+        digits.setLetterSpacing(0.08f);
+        digits.setTypeface(UiFont.get(this, R.string.font_medium));
+        digits.setTextDirection(View.TEXT_DIRECTION_LTR);
+        digits.setGravity(Gravity.CENTER);
+        card.addView(digits, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        TextView address = new TextView(this);
+        address.setText(url);
+        address.setTextColor(getColor(R.color.vision_text));
+        address.setTextSize(11);
+        address.setAlpha(0.7f);
+        address.setTextDirection(View.TEXT_DIRECTION_LTR);
+        address.setGravity(Gravity.CENTER);
+        card.addView(address, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        ImageView close = new ImageView(this);
+        close.setImageResource(R.drawable.ic_close);
+        close.setBackgroundResource(R.drawable.vision_toggle_bg);
+        close.setPadding(dp(11), dp(11), dp(11), dp(11));
+        close.setFocusable(true);
+        close.setClickable(true);
+        close.setContentDescription(getString(R.string.qs_close));
+        close.setImageTintList(getColorStateList(R.drawable.pill_text));
+        close.setOnClickListener(v -> closePhoneCard());
+        LinearLayout.LayoutParams closeLp = new LinearLayout.LayoutParams(dp(40), dp(40));
+        closeLp.topMargin = dp(14);
+        card.addView(close, closeLp);
+        FrameLayout.LayoutParams cardLp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER);
+        View panel = findViewById(R.id.panel);
+        panel.animate().alpha(0f).setDuration(160).withEndAction(() -> panel.setVisibility(View.INVISIBLE)).start();
+        ((FrameLayout) findViewById(R.id.scrim)).addView(card, cardLp);
+        card.setAlpha(0f);
+        card.setScaleX(0.96f);
+        card.setScaleY(0.96f);
+        card.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(220).setInterpolator(Motion.ENTER).start();
+        close.requestFocus();
+        phoneCard = card;
+    }
+
+    private void closePhoneCard() {
+        if (phoneCard == null) return;
+        ((ViewGroup) phoneCard.getParent()).removeView(phoneCard);
+        phoneCard = null;
+        View panel = findViewById(R.id.panel);
+        panel.setVisibility(View.VISIBLE);
+        panel.animate().alpha(1f).setDuration(200).start();
+        GridLayout tiles = findViewById(R.id.tiles);
+        if (tiles.getChildCount() > 0) tiles.getChildAt(0).requestFocus();
+    }
+
+    private static Bitmap qrCode(String text, int size) {
+        try {
+            com.google.zxing.common.BitMatrix m = new com.google.zxing.qrcode.QRCodeWriter()
+                    .encode(text, com.google.zxing.BarcodeFormat.QR_CODE, size, size);
+            int[] pixels = new int[size * size];
+            for (int y = 0; y < size; y++) {
+                for (int x = 0; x < size; x++) pixels[y * size + x] = m.get(x, y) ? 0xFF000000 : 0xFFFFFFFF;
+            }
+            return Bitmap.createBitmap(pixels, size, size, Bitmap.Config.ARGB_8888);
+        } catch (Exception e) {
+            return Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888);
+        }
+    }
+
     @Override
     public void onBackPressed() {
+        if (phoneCard != null) {
+            closePhoneCard();
+            return;
+        }
         if (picker != null && picker.isOpen()) {
             picker.close();
             return;
@@ -610,7 +731,7 @@ public final class QuickSettingsActivity extends Activity {
             scrim.animate().alpha(in ? 1f : 0f).setDuration(duration).start();
             panel.animate().alpha(in ? 1f : 0f).scaleX(in ? 1f : 0.96f).scaleY(in ? 1f : 0.96f)
                     .setDuration(in ? duration : duration * 2 / 3)
-                    .setInterpolator(in ? new DecelerateInterpolator(2.2f) : new AccelerateInterpolator(1.6f))
+                    .setInterpolator(in ? Motion.ENTER : Motion.EXIT)
                     .withEndAction(done).start();
             return;
         }
@@ -624,7 +745,7 @@ public final class QuickSettingsActivity extends Activity {
         scrim.animate().alpha(in ? 1f : 0f).setDuration(duration).start();
         panel.animate().alpha(in ? 1f : 0f).translationX(in ? 0f : offset)
                 .setDuration(in ? duration : duration * 2 / 3)
-                .setInterpolator(in ? new DecelerateInterpolator(2.2f) : new AccelerateInterpolator(1.6f))
+                .setInterpolator(in ? Motion.ENTER : Motion.EXIT)
                 .withEndAction(done).start();
     }
 
@@ -638,7 +759,7 @@ public final class QuickSettingsActivity extends Activity {
             view.setOnFocusChangeListener((v, focused) -> {
                 float scale = v.getWidth() > dp(200) ? 1f + (tileScale - 1f) / 2f : tileScale;
                 v.animate().scaleX(focused ? scale : 1f).scaleY(focused ? scale : 1f)
-                        .setDuration(duration).setInterpolator(new DecelerateInterpolator()).start();
+                        .setDuration(duration).setInterpolator(Motion.SETTLE).start();
             });
             if (view.isFocused()) {
                 view.setScaleX(tileScale);
