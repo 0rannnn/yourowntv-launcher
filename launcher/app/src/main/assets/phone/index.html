@@ -51,6 +51,9 @@
   .theme span { position: absolute; inset: auto 0 0 0; padding: 22px 10px 8px; font-weight: 600; font-size: 15px;
                 background: linear-gradient(transparent, rgba(0,0,0,.7)); }
   .theme.on { border-color: var(--accent); }
+  .note { margin: 0 0 4px; font-size: 14px; opacity: .7; line-height: 1.4; }
+  .reset { width: 100%; margin-top: 12px; padding: 12px; border: 0; border-radius: 12px; font: inherit; font-size: 15px;
+    background: rgba(127,127,127,.18); color: inherit; }
   .walls { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px; padding: 12px 0; }
   .wall { position: relative; aspect-ratio: 16/9; border-radius: 10px; background: var(--field) center/cover; }
   .wall button { position: absolute; top: 4px; left: 4px; width: 28px; height: 28px; border-radius: 50%; background: rgba(0,0,0,.6);
@@ -113,8 +116,12 @@
     <div class="results" id="results"></div>
   </div>
 
-  <h2>תמונות רקע</h2>
+  <h2>מיקום וגודל</h2>
+  <div class="card" id="layout"></div>
+
+  <h2>התמונות שלי</h2>
   <div class="card">
+    <p class="note">התמונות נשמרות בטלוויזיה בערכה משלהן, "תמונות", שאפשר לבחור בכל זמן.</p>
     <div class="walls" id="walls"></div>
     <label class="add">+ הוספת תמונות מהטלפון<input type="file" id="photos" accept="image/*" multiple></label>
   </div>
@@ -175,6 +182,18 @@ const COMMON_SHOWS = [
   ['consume_volume_keys', 'החזקת ווליום מעלה/מורידה ברצף (העוזר חוזר על הלחיצה)', false],
 ];
 
+
+// Where the apps and the clock sit and how big they are (AppsLayout / HeaderExtras on the TV). Each slider is saved
+// the moment it is let go, so the TV shows the change right away.
+const LAYOUT_FIELDS = [
+  ['apps_size', 'גודל האפליקציות (%)', 50, 100, 5, 100],
+  ['columns', 'כמה אפליקציות בשורה', 3, 8, 1, 5],
+  ['apps_x', 'מיקום האפליקציות: שמאל ← → ימין', 0, 100, 5, 50],
+  ['apps_y', 'מיקום האפליקציות: למעלה ← → למטה', -40, 60, 2, 0],
+  ['clock_size', 'גודל השעון (%)', 40, 250, 5, 100],
+  ['clock_x', 'מיקום השעון: שמאל ← → ימין', -90, 90, 2, 0],
+  ['clock_y', 'מיקום השעון: למעלה ← → למטה', -20, 90, 2, 0],
+];
 
 // Switches every theme may have, shown when the theme's settings have them.
 const GENERAL_SHOWS = [
@@ -256,7 +275,7 @@ async function load() {
   $('nameEn').value = cfg.greeting_name || '';
   $('nameHe').value = cfg.greeting_name_he || '';
   showPlace(cfg.location_label_he || cfg.location_label || '');
-  renderThemes(); renderWalls(); renderSettings();
+  renderThemes(); renderWalls(); renderSettings(); renderLayout();
 }
 function change(key, value) { changes[key] = value; $('save').disabled = false; }
 $('nameEn').oninput = e => change('greeting_name', e.target.value.trim());
@@ -284,11 +303,11 @@ function renderWalls() {
   for (const name of state.wallpapers) {
     const d = document.createElement('div');
     d.className = 'wall';
-    d.style.backgroundImage = `url(/api/wallpaper?name=${encodeURIComponent(name)}&t=${token})`;
+    d.style.backgroundImage = `url(/api/wallpaper?slot=images&name=${encodeURIComponent(name)}&t=${token})`;
     const x = document.createElement('button'); x.textContent = '×'; x.setAttribute('aria-label', 'הסרה');
     x.onclick = async () => {
-      if (!confirm('להסיר את התמונה מהערכה?')) return;
-      try { await api('/api/wallpaper/delete', { name }); d.remove(); state.wallpapers = state.wallpapers.filter(n => n !== name); toast('הוסרה'); }
+      if (!confirm(state.wallpapers.length > 1 ? 'למחוק את התמונה מהטלוויזיה?' : 'זו התמונה האחרונה: ערכת "תמונות" תימחק איתה. למחוק?')) return;
+      try { await api('/api/wallpaper/delete', { name }); toast('נמחקה'); await load(); }
       catch (e) { toast(e.message); }
     };
     d.append(x); box.append(d);
@@ -323,7 +342,7 @@ $('photos').onchange = async e => {
     try { await api('/api/wallpaper', body, true); sent++; }
     catch (err) { toast((f.name ? f.name + ': ' : '') + err.message); await new Promise(r => setTimeout(r, 1800)); }
   }
-  if (sent) { toast(`✓ ${sent} תמונות נוספו`); const s = await api('/api/state'); state.wallpapers = s.wallpapers; renderWalls(); }
+  if (sent) { toast(`✓ ${sent} תמונות נוספו לערכת "תמונות"`); await load(); }
 };
 
 // ---- the place -------------------------------------------------------------------------------------------
@@ -363,6 +382,40 @@ async function search() {
 }
 
 // ---- the theme's own settings ----------------------------------------------------------------------------
+function renderLayout() {
+  const cfg = state.config, box = $('layout'); box.innerHTML = '';
+  const own = cfg.ps5_home || cfg.switch_home || cfg.ds_home;
+  box.previousElementSibling.classList.toggle('hidden', !!own);
+  box.classList.toggle('hidden', !!own);
+  if (own) return;
+  for (const [key, label, a, b, step, def] of LAYOUT_FIELDS) {
+    const wrap = document.createElement('label'); wrap.className = 'field';
+    wrap.innerHTML = '<span class="lbl"><span></span><b></b></span>';
+    wrap.querySelector('.lbl span').textContent = label;
+    const out = wrap.querySelector('b');
+    const input = document.createElement('input'); input.type = 'range';
+    input.min = a; input.max = b; input.step = step; input.value = cfg[key] ?? def; out.textContent = input.value;
+    input.oninput = () => { out.textContent = input.value; };
+    input.onchange = () => saveNow({ [key]: Number(input.value) });
+    wrap.append(input); box.append(wrap);
+  }
+  const reset = document.createElement('button'); reset.className = 'reset'; reset.textContent = 'החזרה למיקום ולגודל המקוריים';
+  reset.onclick = () => {
+    const all = {}; for (const f of LAYOUT_FIELDS) if (f[0] !== 'columns') all[f[0]] = null;
+    saveNow(all, true);
+  };
+  box.append(reset);
+}
+// One change straight to the TV (the layout sliders); the rest of the page's unsaved changes stay as they are.
+async function saveNow(values, reload) {
+  try {
+    await api('/api/config', values);
+    for (const [k, v] of Object.entries(values)) { if (v === null) delete state.config[k]; else state.config[k] = v; }
+    toast('✓ עודכן בטלוויזיה');
+    if (reload) renderLayout();
+  } catch (e) { toast(e.message); }
+}
+
 function renderSettings() {
   const cfg = state.config, box = $('settings'); box.innerHTML = '';
   const ps5 = !!cfg.ps5_home, nx = !!cfg.switch_home, n3 = !!cfg.ds_home;

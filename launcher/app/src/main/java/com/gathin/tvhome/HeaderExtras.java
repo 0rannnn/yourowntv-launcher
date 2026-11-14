@@ -102,6 +102,30 @@ final class HeaderExtras {
         centerClock = json != null && json.optBoolean("center_clock", false);
         float size = json != null ? (float) json.optDouble("center_clock_size", 0.36) : 0.36f;
         centerClockSize = size > 0.05f && size < 0.6f ? size : 0.36f;
+        clockScale = json == null ? 1f : AppsLayout.percent(json, "clock_size", 100, 40, 250) / 100f;
+        clockX = json == null ? 0f : AppsLayout.percent(json, "clock_x", 0, -90, 90) / 100f;
+        clockY = json == null ? 0f : AppsLayout.percent(json, "clock_y", 0, -20, 90) / 100f;
+    }
+
+    /** clock_size (40 to 250 %): the clock, its greeting and date, bigger or smaller than the theme's own. */
+    private final float clockScale;
+    /** clock_x / clock_y: how far the clock moves from its own place, as a share of the screen's width / height. */
+    private final float clockX, clockY;
+
+    /**
+     * The corner clock (leftBlock: the greeting, the time, the date and the weather) scaled from its top-left corner
+     * and moved by clock_x / clock_y. Only drawn differently: the top buttons and the grid stay where they are.
+     */
+    private void placeCornerClock() {
+        View block = activity.findViewById(R.id.leftBlock);
+        if (block == null || (clockScale == 1f && clockX == 0f && clockY == 0f)) return;
+        DisplayMetrics screen = activity.getResources().getDisplayMetrics();
+        block.setPivotX(0);
+        block.setPivotY(0);
+        block.setScaleX(clockScale);
+        block.setScaleY(clockScale);
+        block.setTranslationX(clockX * screen.widthPixels);
+        block.setTranslationY(clockY * screen.heightPixels);
     }
 
     /** A true/false key of the theme's config.json, false when the theme has none. */
@@ -118,6 +142,7 @@ final class HeaderExtras {
             return;
         }
         if (weather) addWeatherViews(clock);
+        placeCornerClock();
     }
 
     private void applyClockFont(TextView clock) {
@@ -180,7 +205,7 @@ final class HeaderExtras {
         clock.setFormat24Hour("H:mm");
         clock.setIncludeFontPadding(false);
         clock.setTextColor(Color.WHITE);
-        clock.setTextSize(TypedValue.COMPLEX_UNIT_PX, centerClockSize * height);
+        clock.setTextSize(TypedValue.COMPLEX_UNIT_PX, centerClockSize * clockScale * height);
         applyClockFont(clock);
         clock.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         // Where the digits' tops fall inside the view: the view moves so they land on CENTER_CLOCK_TOP.
@@ -188,7 +213,10 @@ final class HeaderExtras {
         Rect digits = new Rect();
         paint.getTextBounds("0123456789", 0, 10, digits);
         float inset = -paint.getFontMetrics().ascent + digits.top;
-        float glyphTop = CENTER_CLOCK_TOP * height;
+        // clock_y moves the digits down (or up) the screen; clock_x sideways, with the line above them.
+        float glyphTop = Math.max(0, (CENTER_CLOCK_TOP + clockY) * height);
+        float shiftX = clockX * screen.widthPixels;
+        clock.setTranslationX(shiftX);
         glassClock = clock;
         glassTop = inset;
         glassBottom = inset + digits.height();
@@ -240,8 +268,10 @@ final class HeaderExtras {
                 Gravity.TOP | Gravity.CENTER_HORIZONTAL);
         int gap = Math.round(8 * density);
         // Its foot sits just over the digits' tops, whatever height the line comes out at.
-        line.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) ->
-                v.setTranslationY(glyphTop - gap - v.getHeight()));
+        line.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
+            v.setTranslationY(glyphTop - gap - v.getHeight());
+            v.setTranslationX(shiftX);
+        });
 
         View cutOut = root.findViewWithTag(WallpaperPlayer.FOREGROUND_TAG);
         int at = cutOut != null ? root.indexOfChild(cutOut) : root.indexOfChild(activity.findViewById(R.id.sky)) + 1;

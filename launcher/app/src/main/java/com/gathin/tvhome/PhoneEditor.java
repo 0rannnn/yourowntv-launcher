@@ -280,8 +280,9 @@ final class PhoneEditor {
                     .put("cover", images.isEmpty() ? "" : images.get(0).getName())
                     .put("active", name.equals(picked)));
         }
+        // The person's photos: the Images theme's (ImagesTheme), whichever theme is in use.
         JSONArray walls = new JSONArray();
-        for (File f : WallpaperRotation.images(new File(dir, ThemeFiles.WALLPAPERS))) walls.put(f.getName());
+        for (File f : ImagesTheme.photos(context)) walls.put(f.getName());
         return new JSONObject().put("config", cfg).put("themes", themes).put("active", picked)
                 .put("wallpapers", walls).put("tv", Build.MANUFACTURER + " " + Build.MODEL);
     }
@@ -316,40 +317,22 @@ final class PhoneEditor {
         return new JSONObject().put("ok", true);
     }
 
-    /** A photo from the phone (already 1920x1080 JPEG from the page) into the theme in use's rotation. */
+    /**
+     * A photo from the phone into the Images theme (ImagesTheme), kept on the TV; the first one makes the theme. Home
+     * switches to it, so the photo shows at once.
+     */
     private synchronized JSONObject addWallpaper(byte[] data) throws Exception {
         if (data.length == 0 || data.length > 16_000_000) throw new IllegalArgumentException("התמונה גדולה מדי (עד 16MB)");
-        data = toWallpaper(data);
-        File dir = active();
-        File walls = new File(dir, ThemeFiles.WALLPAPERS);
-        if (!walls.isDirectory() && !walls.mkdirs()) throw new IOException("no wallpapers folder");
-        String name = String.format(Locale.ROOT, "90-photo-%d.jpg", System.currentTimeMillis());
-        try (FileOutputStream out = new FileOutputStream(new File(walls, name))) {
-            out.write(data);
-        }
-        // A theme with time-of-day groups shows only the pictures named there: the photo goes into each group.
-        File file = new File(dir, Config.FILE_NAME);
-        JSONObject cfg = readJson(file);
-        JSONObject moods = cfg.optJSONObject("wallpaper_moods");
-        if (moods != null) {
-            for (java.util.Iterator<String> keys = moods.keys(); keys.hasNext(); ) {
-                JSONArray group = moods.optJSONArray(keys.next());
-                if (group != null) group.put(name);
-            }
-            writeJson(file, cfg);
-        }
+        String name = ImagesTheme.add(context, toWallpaper(data));
+        HomeToggles.setTheme(context, ImagesTheme.SLOT);
         changed();
         return new JSONObject().put("ok", true).put("name", name);
     }
 
+    /** A photo out of the Images theme; the last one removes the theme. */
     private synchronized JSONObject deleteWallpaper(String name) throws Exception {
         if (!name.matches("[A-Za-z0-9_.\\-]+") || name.contains("..")) throw new IllegalArgumentException("bad name");
-        File walls = new File(active(), ThemeFiles.WALLPAPERS);
-        File picture = new File(walls, name);
-        if (!picture.isFile()) throw new IllegalArgumentException("no such picture");
-        if (WallpaperRotation.images(walls).size() <= 1) throw new IllegalArgumentException("זו התמונה האחרונה בערכה");
-        picture.delete();
-        WallpaperRotation.foregroundOf(picture).delete();
+        ImagesTheme.delete(context, name);
         changed();
         return new JSONObject().put("ok", true);
     }

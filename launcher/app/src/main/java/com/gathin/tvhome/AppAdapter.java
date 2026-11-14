@@ -108,14 +108,21 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
      * highlight, capped at the design size so 4 columns on a 1080p TV look exactly as before.
      */
     static int tileWidthPx(int innerWidthPx, int columns, float density) {
-        int design = Math.round(DESIGN_W_DP * density);
-        if (innerWidthPx <= 0 || columns <= 0) return square ? Math.round(SQUARE_DP * density) : design;
+        float s = sizeScale;
+        int design = Math.round(DESIGN_W_DP * density * s);
+        if (innerWidthPx <= 0 || columns <= 0) return square ? Math.round(SQUARE_DP * density * s) : design;
         int cell = innerWidthPx / columns;
         int fit = (int) ((cell - 12 * density) / (ps5 ? Ps5Home.zoom : nx ? SwitchHome.ZOOM : FOCUS_SCALE));
         // ps5_home's row of small tiles goes below the 80dp floor the grids keep.
-        int w = Math.max(Math.round((ps5 || ds ? 40 : 80) * density), Math.min(design, fit));
-        return square ? Math.min(w, Math.round((nx || ds ? 200 : SQUARE_DP) * density)) : w;
+        int w = Math.max(Math.round((ps5 || ds ? 40 : 80) * density * s), Math.min(design, fit));
+        return square ? Math.min(w, Math.round((nx || ds ? 200 : SQUARE_DP) * density * s)) : w;
     }
+
+    /**
+     * The theme's apps_size (50 to 100 %, AppsLayout): the tiles' size as a share of the theme's own. Set by
+     * MainActivity with square, before the grid is built.
+     */
+    static float sizeScale = 1f;
 
     static int tileHeightPx(int tileWidthPx) {
         return square ? tileWidthPx : Math.round(tileWidthPx * DESIGN_H_DP / DESIGN_W_DP);

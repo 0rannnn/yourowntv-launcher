@@ -180,6 +180,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private boolean advancedEffects;
     private TextView greeting;
     private View clockBlock;
+    /** The theme's apps_size, apps_x and apps_y: how big the tiles are and where the grid sits (AppsLayout). */
+    private AppsLayout appsLayout = new AppsLayout();
     private View btnInputs;
     /** config show_inputs_pill: false keeps the Inputs pill hidden even when the TV has inputs. */
     private boolean showInputsPill = true;
@@ -408,6 +410,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         density = getResources().getDisplayMetrics().density;
+        // The person's photos are a theme of their own (themes/images): made, or brought up to date, before the theme
+        // in use is read.
+        ImagesTheme.ensure(this);
         // config.xml, overlaid by config.json from a pushed theme (see Config and tools/theme.sh).
         Config cfg = Config.load(this);
         AppAdapter.square = HeaderExtras.themeFlag(this, "square_tiles");
@@ -415,6 +420,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         AppAdapter.ps5 = Ps5Home.on(this);
         AppAdapter.nx = SwitchHome.on(this);
         AppAdapter.ds = DsHome.on(this);
+        appsLayout = AppsLayout.load(this);
+        AppAdapter.sizeScale = appsLayout.size;
         homeAppKeys = RemoteKeys.parseAppKeys(cfg.appKeys);
         appLibrarySelection = cfg.appLibrarySelection;
         libraryOkOpens = cfg.libraryOkOpens;
@@ -672,6 +679,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         int rowsBelowDock = cfg.rowsBelowDock;
         grid.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
             int h = b - t;
+            // apps_size / apps_x: a smaller grid is also a narrower one, placed across the screen as asked.
+            int[] sides = appsLayout.sides(r - l, (int) (10 * density));
+            if (grid.getPaddingLeft() != sides[0] || grid.getPaddingRight() != sides[1]) {
+                grid.setPadding(sides[0], grid.getPaddingTop(), sides[1], grid.getPaddingBottom());
+            }
             // Item height follows the tile size, which follows the columns and the rows that must fit (AppAdapter.tileWidthPx).
             int inner = (r - l) - grid.getPaddingLeft() - grid.getPaddingRight();
             int tileW = AppAdapter.tileWidthPx(inner, h, COLUMNS, rowsBelowDock, cfg.dockTitle, cfg.dockRow, density);
@@ -696,6 +708,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             if (AppAdapter.nx) want = (int) (h * 0.2f);
             // ds_home: the grid starts under the top strip.
             if (AppAdapter.ds) want = (int) (78 * density);
+            // apps_y: the whole grid higher or lower, never off the top and leaving one row on screen.
+            want = appsLayout.top(want, h, itemH);
             if (grid.getPaddingTop() != want) {
                 grid.setPadding(grid.getPaddingLeft(), want, grid.getPaddingRight(), grid.getPaddingBottom());
                 // A vertical grid parks the dock on the new padding line by scrolling (onTileFocused); a sideways
