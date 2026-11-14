@@ -5,6 +5,8 @@
     <string name="qs_sound">צליל</string>
     <string name="qs_accessibility">נגישות</string>
     <string name="qs_keystone">תיקון טרפז</string>
+    <string name="qs_keystone_auto">אוטומטי (יחס מסך)</string>
+    <string name="qs_keystone_manual">ידני</string>
     <string name="qs_launcher">מסך הבית</string>
     <string name="qs_phone_edit">מהטלפון</string>
     <string name="qs_phone_title">עריכת הטלוויזיה מהטלפון</string>

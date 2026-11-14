@@ -119,7 +119,7 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
     }
 
     /**
-     * The theme's apps_size (50 to 100 %, AppsLayout): the tiles' size as a share of the theme's own. Set by
+     * The theme's apps_size (50 to 150 %, AppsLayout): the tiles' size as a share of the theme's own. Set by
      * MainActivity with square, before the grid is built.
      */
     static float sizeScale = 1f;

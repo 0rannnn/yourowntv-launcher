@@ -68,6 +68,8 @@ public final class QuickSettingsActivity extends Activity {
     private static final String SPOTIFY_LIBRARY = "com.spotify.androidtv.medialibraryservice.AndroidTvMediaLibraryService";
     private static final String SPOTIFY_BUTTONS = "androidx.media3.session.MediaButtonReceiver";
     private static final String KEYSTONE_ACTION = "com.fengmi.projector.imaging.action.START_KEYSTONE";
+    /** The projector's own automatic keystone: it projects a pattern and squares the picture to the screen's 16:9. */
+    private static final String AUTO_KEYSTONE_ACTION = "com.fengmi.projector.imaging.action.START_AUTO_KEYSTONE";
     /** A2DP, headset, HID host (4, hidden constant) and LE audio (22): the profiles a TV's accessories use. */
     private static final int[] PROFILES = {BluetoothProfile.A2DP, BluetoothProfile.HEADSET, 4, 22};
 
@@ -153,7 +155,18 @@ public final class QuickSettingsActivity extends Activity {
         Intent keystone = new Intent(KEYSTONE_ACTION);
         if (hasKeystone == null) hasKeystone = getPackageManager().resolveActivity(keystone, 0) != null;
         if (hasKeystone) {
-            addTile(tiles, R.drawable.ic_keystone, getString(R.string.qs_keystone), null, listOf(keystone));
+            Intent auto = new Intent(AUTO_KEYSTONE_ACTION);
+            if (getPackageManager().resolveActivity(auto, 0) == null) {
+                addTile(tiles, R.drawable.ic_keystone, getString(R.string.qs_keystone), null, listOf(keystone));
+            } else {
+                // Two ways: automatic, back to the TV's ratio in one press, or the manual corners.
+                View keystoneTile = addTile(tiles, R.drawable.ic_keystone, getString(R.string.qs_keystone), null, null);
+                keystoneTile.setOnClickListener(v -> picker.show(getString(R.string.qs_keystone), java.util.Arrays.asList(
+                        new PanelPicker.Option(getString(R.string.qs_keystone_auto), null, R.drawable.ic_picture, false,
+                                () -> open(listOf(auto))),
+                        new PanelPicker.Option(getString(R.string.qs_keystone_manual), null, R.drawable.ic_keystone, false,
+                                () -> open(listOf(keystone))))));
+            }
         }
         addTile(tiles, R.drawable.ic_apps, getString(R.string.quick_apps), getString(R.string.quick_apps_hint),
                 listOf(SystemSettings.intent(this, Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS)));

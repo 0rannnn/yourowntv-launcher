@@ -438,7 +438,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (SwitchHome.on(this)) SwitchHome.load(this);
         if (DsHome.on(this)) DsHome.load(this);
         COLUMNS = Ps5Home.on(this) ? Ps5Home.columns : SwitchHome.on(this) ? SwitchHome.columns
-                : DsHome.on(this) ? DsHome.columns : cfg.columns;
+                : DsHome.on(this) ? DsHome.columns : appsLayout.columns(cfg.columns);
         animations = cfg.animations;
         advancedEffects = cfg.animations && cfg.advancedEffects;
         reducedMotion = cfg.reducedMotion;
