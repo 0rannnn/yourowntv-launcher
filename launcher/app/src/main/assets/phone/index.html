@@ -197,11 +197,13 @@ function toast(text) {
 }
 async function api(path, body, raw) {
   const opt = { method: body === undefined ? 'GET' : 'POST', headers: { 'X-Token': token } };
-  if (body !== undefined) { opt.body = raw ? body : JSON.stringify(body); opt.headers['Content-Type'] = raw ? 'image/jpeg' : 'application/json'; }
-  const r = await fetch(path, opt);
+  if (body !== undefined) { opt.body = raw ? body : JSON.stringify(body); opt.headers['Content-Type'] = raw ? (body.type || 'application/octet-stream') : 'application/json'; }
+  let r;
+  try { r = await fetch(path, opt); } catch (e) { throw new Error('אין חיבור לטלוויזיה: לבדוק שהטלפון על אותו Wi-Fi כמו הטלוויזיה'); }
   if (r.status === 401) { token = ''; try { localStorage.removeItem(KEY); } catch (e) {} showPair(); throw new Error('צריך להתחבר מחדש'); }
-  const j = await r.json();
-  if (!r.ok || j.error) throw new Error(j.error || 'הטלוויזיה לא ענתה');
+  let j;
+  try { j = await r.json(); } catch (e) { throw new Error('הטלוויזיה ענתה תשובה לא צפויה (' + r.status + ')'); }
+  if (!r.ok || j.error) throw new Error(j.error || 'הטלוויזיה לא ענתה (' + r.status + ')');
   return j;
 }
 
@@ -314,7 +316,12 @@ $('photos').onchange = async e => {
   let sent = 0;
   for (const f of files) {
     toast(`שולח ${sent + 1} מתוך ${files.length}…`);
-    try { await api('/api/wallpaper', await toWallpaper(f), true); sent++; } catch (err) { toast(err.message); }
+    // The browser makes it 1920x1080; a picture it cannot open (HEIC from an iPhone or a Samsung) goes as it is,
+    // and the TV makes it.
+    let body;
+    try { body = await toWallpaper(f); } catch (e) { body = f; }
+    try { await api('/api/wallpaper', body, true); sent++; }
+    catch (err) { toast((f.name ? f.name + ': ' : '') + err.message); await new Promise(r => setTimeout(r, 1800)); }
   }
   if (sent) { toast(`✓ ${sent} תמונות נוספו`); const s = await api('/api/state'); state.wallpapers = s.wallpapers; renderWalls(); }
 };
