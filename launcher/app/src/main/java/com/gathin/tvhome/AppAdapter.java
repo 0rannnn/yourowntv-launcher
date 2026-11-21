@@ -333,7 +333,17 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
                 fresh.add(new Entry(label, component, banner, icon));
             }
         }
+        List<String> importing = importPackages;
         Collections.sort(fresh, (a, b) -> {
+            // An order being adopted (the TV's own home's, from the setup app) comes before everything else.
+            if (importing != null) {
+                int ia = importing.indexOf(a.pkg), ib = importing.indexOf(b.pkg);
+                if (ia >= 0 || ib >= 0) {
+                    if (ia < 0) return 1;
+                    if (ib < 0) return -1;
+                    if (ia != ib) return Integer.compare(ia, ib);
+                }
+            }
             // The owner's own order first; tiles it does not know (new installs) follow by the rule below.
             int saved = Order.compare(savedRanks, a.component.flattenToShortString(), b.component.flattenToShortString());
             if (saved != 0) return saved;
@@ -348,6 +358,13 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             if (ca != cb) return ca ? -1 : 1;
             return a.label.compareToIgnoreCase(b.label);
         });
+        if (importing != null) {
+            importPackages = null;
+            List<String> keys = new ArrayList<>();
+            for (Entry e : fresh) keys.add(e.component.flattenToShortString());
+            if (onImported != null) onImported.accept(keys);
+            onImported = null;
+        }
         // Retain the optional Default-home tile until dependent tile-ordering work is merged.
         if (showHomeSettings
                 && pm.resolveActivity(new Intent(Settings.ACTION_HOME_SETTINGS), 0) != null) {
@@ -627,6 +644,19 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
     @Override
     public long getItemId(int position) {
         return isLibraryAt(position) ? Long.MIN_VALUE : items.get(position).component.flattenToShortString().hashCode();
+    }
+
+    /** A package order to adopt (OrderImport): it decides the next reload's order, then is handed back to be saved. */
+    private List<String> importPackages;
+    private java.util.function.Consumer<List<String>> onImported;
+
+    /**
+     * Adopts this package order at the next reload: its apps first in this order, then every other app as the usual
+     * rule puts it; the whole result goes to done (tile keys), to be saved as the one order of every theme.
+     */
+    void importOrder(List<String> packages, java.util.function.Consumer<List<String>> done) {
+        importPackages = packages;
+        onImported = done;
     }
 
     /** Uses this saved order and dock size from the next reload() (Order.ranks, Order.docked). */

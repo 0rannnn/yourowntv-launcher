@@ -672,6 +672,18 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         fillDockLeavesSlots = !cfg.fillDock;
         Order savedOrder = Order.load(Order.file(this));
         adapter.setSavedOrder(Order.ranks(savedOrder, dockApps), Order.docked(savedOrder, dockApps));
+        // An order handed over by the setup app (the TV's own Google TV order, or ours from before an update): adopted
+        // as the one order of every theme, every app in it, so switching themes never changes the order.
+        List<String> handedOver = OrderImport.take(this);
+        if (handedOver != null) {
+            adapter.importOrder(handedOver, keys -> {
+                Order adopted = new Order(Order.dockKey(dockApps), keys);
+                if (Order.save(Order.file(this), adopted)) adapter.setSavedOrder(Order.ranks(adopted, dockApps), -1);
+                OrderImport.backup(this, keys);
+            });
+        } else if (savedOrder != null) {
+            OrderImport.backup(this, savedOrder.keys);
+        }
         grid.setAdapter(adapter);
         if (HeaderExtras.themeFlag(this, "recent_apps")) {
             recentRow = new RecentRow(this, root, grid, this::focusTopBar,
@@ -1711,6 +1723,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             Order order = new Order(Order.dockKey(dockApps), keys, docked);
             if (Order.save(Order.file(this), order)) {
                 adapter.setSavedOrder(Order.ranks(order, dockApps), Order.docked(order, dockApps));
+                OrderImport.backup(this, keys);
             } else {
                 Toast.makeText(this, R.string.reorder_not_saved, Toast.LENGTH_SHORT).show();
             }
