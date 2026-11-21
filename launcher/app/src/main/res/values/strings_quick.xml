@@ -4,6 +4,8 @@
     <string name="qs_screensaver">Screensaver</string>
     <string name="qs_bluetooth">Bluetooth</string>
     <string name="qs_sound">Sound</string>
+    <string name="volume_muted">Muted</string>
+    <string name="volume_fixed">Set by the connected device</string>
     <string name="qs_accessibility">Accessibility</string>
     <string name="qs_keystone">Keystone</string>
     <string name="qs_keystone_auto">Auto (TV ratio)</string>

@@ -3,6 +3,8 @@
     <string name="qs_screensaver">שומר מסך</string>
     <string name="qs_bluetooth">בלוטות\'</string>
     <string name="qs_sound">צליל</string>
+    <string name="volume_muted">מושתק</string>
+    <string name="volume_fixed">נשלט ע״י המכשיר המחובר</string>
     <string name="qs_accessibility">נגישות</string>
     <string name="qs_keystone">תיקון טרפז</string>
     <string name="qs_keystone_auto">אוטומטי (יחס מסך)</string>
