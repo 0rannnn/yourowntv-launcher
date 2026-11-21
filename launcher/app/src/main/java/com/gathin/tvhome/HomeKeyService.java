@@ -150,6 +150,7 @@ public class HomeKeyService extends AccessibilityService {
         if (gamepads != null) gamepads.stop();
         if (consumeVolumeKeys) VolumeKeys.stop();
         VolumeMeter.detach(this);
+        VolumeHold.stop();
         super.onDestroy();
     }
 
@@ -194,6 +195,8 @@ public class HomeKeyService extends AccessibilityService {
         consumeVolumeKeys = config.consumeVolumeKeys;
         // Our own volume meter over any app (VolumeMeter); the theme's volume_meter: false turns it off.
         VolumeMeter.attach(this);
+        // Holding a volume key repeats quickly, fed by the shell watcher (VolumeHold) where the firmware hides the keys.
+        VolumeHold.start(this);
         appKeys = RemoteKeys.parseAppKeys(config.appKeys);
         appScancodes = RemoteKeys.parseAppScancodes(config.appKeys);
         RemoteKeys.applyKeyFilter(this, config.keyFilter);
