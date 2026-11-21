@@ -193,6 +193,7 @@ public class HomeKeyService extends AccessibilityService {
         settingsKeycodes = config.settingsKeycodes;
         settingsPanel = config.settingsKeyPanel;
         consumeVolumeKeys = config.consumeVolumeKeys;
+        VolumeKeys.consuming = consumeVolumeKeys;
         // Our own volume meter over any app (VolumeMeter); the theme's volume_meter: false turns it off.
         VolumeMeter.attach(this);
         // Holding a volume key repeats quickly, fed by the shell watcher (VolumeHold) where the firmware hides the keys.

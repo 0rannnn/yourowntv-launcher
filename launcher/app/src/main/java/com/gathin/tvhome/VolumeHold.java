@@ -36,6 +36,11 @@ final class VolumeHold {
      * going away): 4 seconds take the volume from 0 to the top, and holding on just keeps it there.
      */
     static final long MAX_HOLD_MS = 4000;
+    /** On an external sound device (a soundbar): a longer wait before the first extra step, and checks for its report. */
+    static final long EXTERNAL_DELAY_MS = 600;
+    static final long EXTERNAL_POLL_MS = 80;
+    /** A soundbar takes a few steps a second: a hold from the bottom to the top takes longer than on the speaker. */
+    static final long EXTERNAL_MAX_HOLD_MS = 30_000;
     private static VolumeHold active;
     /** Whether the shell watcher is connected now (when not, Home asks the setup app to start it). */
     static volatile boolean live;
@@ -138,44 +143,57 @@ final class VolumeHold {
 
     private void press(int direction) {
         release();
-        // Sound on an external device (a soundbar over HDMI ARC/eARC, Bluetooth): its volume is set by that device,
-        // one HDMI-CEC message per step, slowly; extra steps of ours would pile up there and run on after the key is
-        // let go (the Xiaomi with a soundbar). The TV's own handling is left alone.
-        if (externalOutput()) return;
         heldKey = direction;
         long startedAt = SystemClock.uptimeMillis();
         int before = earlierLevel;
+        // Sound on an external device (a soundbar over HDMI ARC/eARC, Bluetooth): its volume is set by that device,
+        // one HDMI-CEC message per step, slowly. There a held key gets one step at a time, the next only once the
+        // device has reported the last one (never more than one waiting there, so nothing runs on after the release).
+        boolean external = externalOutput();
+        long delay = external ? EXTERNAL_DELAY_MS : DELAY_MS;
+        long maxHold = external ? EXTERNAL_MAX_HOLD_MS : MAX_HOLD_MS;
         repeat = new Runnable() {
+            private int waitingFor = -1;
+            private long sentAt;
+
             @Override
             public void run() {
-                if (SystemClock.uptimeMillis() - startedAt < DELAY_MS + INTERVAL_MS) {
-                    // The first step only. The helper got this key itself (Xiaomi, TCL): it repeats a held key, so
-                    // this stands aside. And a press the TV did not take (the level did not move: a stray signal
+                long now = SystemClock.uptimeMillis();
+                if (now - startedAt < delay + INTERVAL_MS && waitingFor < 0) {
+                    // The first step only. The helper swallows this key and repeats it itself (TCL): this stands
+                    // aside. On the TV's speaker, a press the TV did not take (the level did not move: a stray signal
                     // from another device) is never turned into a run of steps.
-                    if (SystemClock.uptimeMillis() - VolumeKeys.lastKeyAt < 1500 || level() == before) {
+                    if ((VolumeKeys.consuming && now - VolumeKeys.lastKeyAt < 1500) || (!external && level() == before)) {
                         release();
                         return;
                     }
                 }
-                // Stops by itself: at the top or the bottom, and after MAX_HOLD_MS even if the release never came.
-                if (SystemClock.uptimeMillis() - startedAt > MAX_HOLD_MS + DELAY_MS) {
+                // Stops by itself: at the top or the bottom, and after the longest hold even if the release never came.
+                if (now - startedAt > maxHold + delay) {
                     release();
                     return;
                 }
                 try {
-                    int now = audio.getStreamVolume(AudioManager.STREAM_MUSIC);
+                    int level = audio.getStreamVolume(AudioManager.STREAM_MUSIC);
                     int max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
-                    if ((direction == AudioManager.ADJUST_RAISE && now >= max) || (direction == AudioManager.ADJUST_LOWER && now <= 0)) {
+                    if ((direction == AudioManager.ADJUST_RAISE && level >= max) || (direction == AudioManager.ADJUST_LOWER && level <= 0)) {
                         release();
                         return;
                     }
+                    if (external && waitingFor >= 0 && level == waitingFor && now - sentAt < 1500) {
+                        // The device has not taken the last step yet: wait for it.
+                        main.postDelayed(this, EXTERNAL_POLL_MS);
+                        return;
+                    }
                     audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, direction, 0);
+                    waitingFor = level;
+                    sentAt = now;
                 } catch (RuntimeException ignored) {
                 }
-                main.postDelayed(this, INTERVAL_MS);
+                main.postDelayed(this, external ? EXTERNAL_POLL_MS : INTERVAL_MS);
             }
         };
-        main.postDelayed(repeat, DELAY_MS);
+        main.postDelayed(repeat, delay);
     }
 
     private void release() {

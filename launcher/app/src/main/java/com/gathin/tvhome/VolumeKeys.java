@@ -22,6 +22,8 @@ final class VolumeKeys {
     static final long MAX_REPEAT_MS = 4000;
     /** When the helper last received a volume key itself: then VolumeHold (the shell watcher) stands aside. */
     static volatile long lastKeyAt;
+    /** Whether the key helpers swallow volume keys and repeat them here (consume_volume_keys, TCL only). */
+    static volatile boolean consuming;
 
     /** Created on first use, so the class loads in JVM tests that only call the pure methods. */
     private static Handler handler;
