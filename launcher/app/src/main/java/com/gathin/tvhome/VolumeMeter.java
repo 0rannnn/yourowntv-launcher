@@ -30,7 +30,8 @@ import android.widget.TextView;
 import org.json.JSONObject;
 
 /**
- * Our own volume meter: the TV's volume on a 0 to 100 scale, in a glass pill at the top of the screen, over any app,
+ * Our own volume meter: the TV's volume on a 0 to 100 scale, in a slim glass column on the right edge (as a TV's own
+ * volume bar: the number on top, the bar filling from the bottom, the speaker under it; dimmed while muted), over any app,
  * for two seconds after every change. Some firmware never shows its own bar for a change made through the key helper
  * (Xiaomi), and the others draw it differently on every model; this one is the same everywhere.
  *
@@ -173,15 +174,14 @@ final class VolumeMeter {
             icon.setAlpha(muted ? 0.45f : 1f);
             bar.setLevel(Math.max(0, now));
             bar.setVisibility(now < 0 ? View.GONE : View.VISIBLE);
-            number.setText(now < 0 ? service.getString(R.string.volume_fixed) : muted ? service.getString(R.string.volume_muted)
-                    : String.valueOf(now));
+            number.setText(now < 0 ? "–" : String.valueOf(Math.max(0, now)));
             if (!added) {
                 windows.addView(pill, params());
                 added = true;
                 pill.setAlpha(0f);
-                pill.setTranslationY(-dp(12));
+                pill.setTranslationX(dp(24));
             }
-            pill.animate().alpha(1f).translationY(0).setDuration(180).setInterpolator(Motion.ENTER).start();
+            pill.animate().alpha(1f).translationX(0).setDuration(180).setInterpolator(Motion.ENTER).start();
             main.removeCallbacks(hide);
             main.postDelayed(hide, SHOW_MS);
         } catch (RuntimeException e) {
@@ -192,7 +192,7 @@ final class VolumeMeter {
 
     private void hide() {
         if (pill == null || !added) return;
-        pill.animate().alpha(0f).translationY(-dp(12)).setDuration(220).setInterpolator(Motion.EXIT)
+        pill.animate().alpha(0f).translationX(dp(24)).setDuration(220).setInterpolator(Motion.EXIT)
                 .withEndAction(this::remove).start();
     }
 
@@ -213,46 +213,46 @@ final class VolumeMeter {
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
                         | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                 PixelFormat.TRANSLUCENT);
-        lp.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
-        lp.y = dp(36);
+        lp.gravity = Gravity.END | Gravity.CENTER_VERTICAL;
+        lp.x = dp(36);
         return lp;
     }
 
+    /** A slim glass column on the right: the number on top, the bar filling from the bottom, the speaker under it. */
     private void build() {
         pill = new LinearLayout(service);
-        pill.setOrientation(LinearLayout.HORIZONTAL);
-        pill.setGravity(Gravity.CENTER_VERTICAL);
-        pill.setPadding(dp(22), dp(14), dp(26), dp(14));
+        pill.setOrientation(LinearLayout.VERTICAL);
+        pill.setGravity(Gravity.CENTER_HORIZONTAL);
+        pill.setPadding(dp(14), dp(18), dp(14), dp(16));
         GradientDrawable glass = new GradientDrawable();
-        glass.setCornerRadius(dp(40));
+        glass.setCornerRadius(dp(36));
         glass.setColor(0xD91C1C22);
         glass.setStroke(Math.max(1, dp(1)), 0x33FFFFFF);
         pill.setBackground(glass);
         pill.setElevation(dp(10));
 
-        icon = new ImageView(service);
-        icon.setImageResource(R.drawable.ic_volume);
-        icon.setColorFilter(Color.WHITE);
-        pill.addView(icon, new LinearLayout.LayoutParams(dp(30), dp(30)));
-
-        bar = new Bar(service);
-        LinearLayout.LayoutParams barLp = new LinearLayout.LayoutParams(dp(300), dp(10));
-        barLp.leftMargin = dp(18);
-        barLp.rightMargin = dp(18);
-        pill.addView(bar, barLp);
-
         number = new TextView(service);
         number.setTextColor(Color.WHITE);
-        number.setTextSize(TypedValue.COMPLEX_UNIT_SP, 24);
+        number.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20);
         number.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         number.setSingleLine(true);
-        number.setMaxLines(1);
         number.setIncludeFontPadding(false);
-        number.setMinWidth(dp(56));
+        number.setMinWidth(dp(40));
         number.setGravity(Gravity.CENTER);
         number.setTag(HebrewFont.KEEP);
         pill.addView(number, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        bar = new Bar(service);
+        LinearLayout.LayoutParams barLp = new LinearLayout.LayoutParams(dp(10), dp(240));
+        barLp.topMargin = dp(14);
+        barLp.bottomMargin = dp(14);
+        pill.addView(bar, barLp);
+
+        icon = new ImageView(service);
+        icon.setImageResource(R.drawable.ic_volume);
+        icon.setColorFilter(Color.WHITE);
+        pill.addView(icon, new LinearLayout.LayoutParams(dp(26), dp(26)));
     }
 
     private int dp(float value) {
@@ -280,14 +280,15 @@ final class VolumeMeter {
 
         @Override
         protected void onDraw(Canvas canvas) {
-            float r = getHeight() / 2f;
+            float r = getWidth() / 2f;
             rect.set(0, 0, getWidth(), getHeight());
             canvas.drawRoundRect(rect, r, r, track);
             // Glide a quarter of the way per frame: a held key reads as one smooth movement.
             shown += (target - shown) * 0.25f;
             if (Math.abs(target - shown) < 0.002f) shown = target;
             if (shown > 0) {
-                rect.set(0, 0, Math.max(getHeight(), getWidth() * shown), getHeight());
+                float h = Math.max(getWidth(), getHeight() * shown);
+                rect.set(0, getHeight() - h, getWidth(), getHeight());
                 canvas.drawRoundRect(rect, r, r, fill);
             }
             if (shown != target) postInvalidateOnAnimation();
