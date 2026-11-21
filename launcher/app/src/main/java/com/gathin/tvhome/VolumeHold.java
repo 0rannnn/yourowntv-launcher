@@ -138,6 +138,10 @@ final class VolumeHold {
 
     private void press(int direction) {
         release();
+        // Sound on an external device (a soundbar over HDMI ARC/eARC, Bluetooth): its volume is set by that device,
+        // one HDMI-CEC message per step, slowly; extra steps of ours would pile up there and run on after the key is
+        // let go (the Xiaomi with a soundbar). The TV's own handling is left alone.
+        if (externalOutput()) return;
         heldKey = direction;
         long startedAt = SystemClock.uptimeMillis();
         int before = earlierLevel;
@@ -197,6 +201,21 @@ final class VolumeHold {
             main.postDelayed(this, 100);
         }
     };
+
+    /** Whether media plays on something other than the TV's own speaker (HDMI ARC/eARC, Bluetooth, USB, line out). */
+    private boolean externalOutput() {
+        try {
+            android.media.AudioAttributes media = new android.media.AudioAttributes.Builder()
+                    .setUsage(android.media.AudioAttributes.USAGE_MEDIA).build();
+            if (android.os.Build.VERSION.SDK_INT >= 33) {
+                for (android.media.AudioDeviceInfo d : audio.getAudioDevicesForAttributes(media)) {
+                    if (d.getType() != android.media.AudioDeviceInfo.TYPE_BUILTIN_SPEAKER) return true;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
 
     private int level() {
         try {
