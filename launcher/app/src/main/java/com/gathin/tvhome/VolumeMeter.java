@@ -73,16 +73,6 @@ final class VolumeMeter {
         }
     };
     private static final long POLL_MS = 100;
-    /** Hold boost: one extra step, halfway to the firmware's next one, while a volume key is held (see boost). */
-    private static final long BOOST_DELAY_MS = 110;
-    /** Two steps in the same direction this close together mean the key is held, not tapped. */
-    private static final long HELD_GAP_MS = 600;
-    private long lastStepAt;
-    private int lastDirection;
-    /** Our own extra steps land just after we make them: those changes are shown but not boosted again. */
-    private long ownStepsUntil;
-    /** The last volume key the helper itself received: then VolumeKeys repeats a held key and no boost is needed. */
-    private static long lastKeyAt;
 
     private VolumeMeter(AccessibilityService service) {
         this.service = service;
@@ -96,8 +86,6 @@ final class VolumeMeter {
         if (active != null || !enabled(service)) return;
         VolumeMeter meter = new VolumeMeter(service);
         if (meter.audio == null || meter.windows == null) return;
-        JSONObject json = HeaderExtras.readConfig(service);
-        meter.boostEnabled = json == null || json.optBoolean("volume_hold_boost", true);
         meter.start();
         active = meter;
     }
@@ -115,13 +103,9 @@ final class VolumeMeter {
         int code = event.getKeyCode();
         if (code == KeyEvent.KEYCODE_VOLUME_UP || code == KeyEvent.KEYCODE_VOLUME_DOWN
                 || code == KeyEvent.KEYCODE_VOLUME_MUTE) {
-            lastKeyAt = android.os.SystemClock.uptimeMillis();
             meter.main.postDelayed(() -> meter.show(true), 120);
         }
     }
-
-    /** The theme's volume_hold_boost: false leaves a held key at the firmware's own speed. */
-    private boolean boostEnabled = true;
 
     private static boolean enabled(Context ctx) {
         JSONObject json = HeaderExtras.readConfig(ctx);
@@ -182,7 +166,6 @@ final class VolumeMeter {
     private void show(boolean fromKey) {
         int now = level();
         if (!fromKey && now == last) return;
-        if (!fromKey && now >= 0 && last >= 0) boost(now - last);
         last = now;
         try {
             if (pill == null) build();
@@ -205,33 +188,6 @@ final class VolumeMeter {
             // the overlay could not be shown (the helper is going away): the next change tries again
             added = false;
         }
-    }
-
-    /**
-     * Holding a volume key: some firmware (Formovie) takes the remote's volume keys before any app sees them and
-     * repeats a held one at only about 4 steps a second. Steps in the same direction close together mean the key is
-     * held, so each one gets one more step, placed halfway to the firmware's next: holding moves evenly at about twice
-     * the speed, a single press still moves one step. Not when the helper gets the keys itself (VolumeKeys repeats
-     * those quickly already).
-     */
-    private void boost(int change) {
-        long t = android.os.SystemClock.uptimeMillis();
-        int direction = Integer.signum(change);
-        if (direction == 0 || t < ownStepsUntil) return;
-        boolean held = direction == lastDirection && t - lastStepAt < HELD_GAP_MS && t - lastKeyAt > 1500;
-        lastDirection = direction;
-        lastStepAt = t;
-        // The shell watcher gives the exact key down and up (VolumeHold): it repeats instead.
-        if (!held || !boostEnabled || VolumeHold.live) return;
-        // Our step, and the change it makes, are not boosted again: the firmware's next step comes after this.
-        ownStepsUntil = t + BOOST_DELAY_MS + 110;
-        main.postDelayed(() -> {
-            try {
-                audio.adjustStreamVolume(AudioManager.STREAM_MUSIC,
-                        direction > 0 ? AudioManager.ADJUST_RAISE : AudioManager.ADJUST_LOWER, 0);
-            } catch (RuntimeException ignored) {
-            }
-        }, BOOST_DELAY_MS);
     }
 
     private void hide() {

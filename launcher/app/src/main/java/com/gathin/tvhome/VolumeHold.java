@@ -23,16 +23,21 @@ import java.nio.charset.StandardCharsets;
  * setup app, com.gathin.kit's Kit.VOLUME_WATCHER, and by phone-kit/update_tvs.py) runs {@code getevent} and streams
  * its lines to this server on
  * 127.0.0.1:{@link #PORT}. A volume key down starts our own repeat after {@link #DELAY_MS} (a tap stays the
- * firmware's single step), every {@link #INTERVAL_MS}, until the key comes up. While the watcher is connected,
- * VolumeMeter's hold boost stands aside.
+ * firmware's single step), every {@link #INTERVAL_MS}, until the key comes up, any other key goes down, the volume
+ * reaches the top or the bottom, or {@link #MAX_HOLD_MS} pass (so a lost release can never run the volume away).
  */
 final class VolumeHold {
     private static final String TAG = "VolumeHold";
     static final int PORT = 8897;
     static final long DELAY_MS = 350;
     static final long INTERVAL_MS = 50;
+    /**
+     * A repeat never runs longer than this, whatever happens to the key's release (a lost "up" line, the watcher
+     * going away): 4 seconds take the volume from 0 to the top, and holding on just keeps it there.
+     */
+    static final long MAX_HOLD_MS = 4000;
     private static VolumeHold active;
-    /** Whether the shell watcher is connected now (VolumeMeter's boost waits while it is). */
+    /** Whether the shell watcher is connected now (when not, Home asks the setup app to start it). */
     static volatile boolean live;
 
     private final Context context;
@@ -95,14 +100,23 @@ final class VolumeHold {
         }
     }
 
-    /** "/dev/input/event11: EV_KEY KEY_VOLUMEUP DOWN" (getevent -ql); everything else is ignored. */
+    /**
+     * "/dev/input/event11: EV_KEY KEY_VOLUMEUP DOWN" (getevent -ql). A volume key down starts the repeat, its up (or
+     * any other key going down) stops it; everything else is ignored.
+     */
     private void handle(String line) {
         if (!line.contains("EV_KEY")) return;
-        int key = line.contains("KEY_VOLUMEUP") ? AudioManager.ADJUST_RAISE
-                : line.contains("KEY_VOLUMEDOWN") ? AudioManager.ADJUST_LOWER : 0;
-        if (key == 0) return;
-        if (line.contains(" DOWN")) main.post(() -> press(key));
-        else if (line.contains(" UP")) main.post(this::release);
+        String[] parts = line.trim().split("\\s+");
+        if (parts.length < 4) return;
+        String code = parts[parts.length - 2], state = parts[parts.length - 1];
+        int key = "KEY_VOLUMEUP".equals(code) ? AudioManager.ADJUST_RAISE
+                : "KEY_VOLUMEDOWN".equals(code) ? AudioManager.ADJUST_LOWER : 0;
+        if (key == 0) {
+            if ("DOWN".equals(state)) main.post(this::release);
+            return;
+        }
+        if ("DOWN".equals(state)) main.post(() -> press(key));
+        else if ("UP".equals(state)) main.post(this::release);
     }
 
     /** While no watcher is connected: asks the setup app to start one, then again every 5 minutes. */
@@ -124,10 +138,22 @@ final class VolumeHold {
     private void press(int direction) {
         release();
         heldKey = direction;
+        long startedAt = SystemClock.uptimeMillis();
         repeat = new Runnable() {
             @Override
             public void run() {
+                // Stops by itself: at the top or the bottom, and after MAX_HOLD_MS even if the release never came.
+                if (SystemClock.uptimeMillis() - startedAt > MAX_HOLD_MS + DELAY_MS) {
+                    release();
+                    return;
+                }
                 try {
+                    int now = audio.getStreamVolume(AudioManager.STREAM_MUSIC);
+                    int max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+                    if ((direction == AudioManager.ADJUST_RAISE && now >= max) || (direction == AudioManager.ADJUST_LOWER && now <= 0)) {
+                        release();
+                        return;
+                    }
                     audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, direction, 0);
                 } catch (RuntimeException ignored) {
                 }
