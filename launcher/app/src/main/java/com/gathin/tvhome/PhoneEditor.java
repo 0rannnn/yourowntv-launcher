@@ -221,11 +221,22 @@ final class PhoneEditor {
                 return pickTheme(new JSONObject(r.text()).optString("slot"));
             case "/api/wallpaper":
                 return "GET".equals(r.method) ? thumbnail(r.query.get("name"), r.query.get("slot")) : addWallpaper(r.body);
+            case "/api/report":
+                return report();
             case "/api/wallpaper/delete":
                 return deleteWallpaper(new JSONObject(r.text()).optString("name"));
             default:
                 return null;
         }
+    }
+
+    /** The troubleshooting report the setup app wrote (TroubleshootCard), as text; an error when there is none. */
+    private JSONObject report() throws Exception {
+        File file = new File(Config.baseDir(context), TroubleshootCard.REPORT);
+        if (!file.isFile()) throw new IllegalArgumentException("עוד אין דוח: בטלוויזיה, בחלונית ההגדרות, סידור תקלות > יצירת דוח");
+        byte[] data = java.nio.file.Files.readAllBytes(file.toPath());
+        return new JSONObject().put("ok", true).put("time", file.lastModified())
+                .put("text", new String(data, java.nio.charset.StandardCharsets.UTF_8));
     }
 
     private SharedPreferences prefs() {

@@ -27,6 +27,23 @@
     <string name="qs_lang_hebrew" translatable="false">עברית</string>
     <string name="qs_lang_english" translatable="false">English</string>
     <string name="qs_close">Close</string>
+    <string name="qs_fix">Troubleshoot</string>
+    <string name="qs_fix_title">Troubleshooting</string>
+    <string name="qs_fix_ts_on">✓ Tailscale connected: %1$s</string>
+    <string name="qs_fix_ts_off">Tailscale is installed but not connected: open it and sign in</string>
+    <string name="qs_fix_ts_missing">Tailscale is not installed</string>
+    <string name="qs_fix_ts_open">Open Tailscale</string>
+    <string name="qs_fix_ts_install">Install Tailscale</string>
+    <string name="qs_fix_channel">Open repair channel</string>
+    <string name="qs_fix_channel_on">✓ Repair channel open</string>
+    <string name="qs_fix_channel_off">Repair channel closed</string>
+    <string name="qs_fix_channel_started">Opening the repair channel… (allow it on the TV if asked)</string>
+    <string name="qs_fix_report">Make a report</string>
+    <string name="qs_fix_report_ready">✓ Report ready (%1$s): download it from the phone page</string>
+    <string name="qs_fix_report_none">No report yet</string>
+    <string name="qs_fix_report_started">Making the report…</string>
+    <string name="qs_fix_need_kit">This needs the "Install Home Screen" app on this TV</string>
+    <string name="qs_fix_note">With Tailscale connected and the repair channel open, the computer reaches this TV from anywhere at the address shown, to see what is wrong and fix it. The first time, the TV asks to allow the computer: choose Always allow.</string>
     <string name="qs_not_playing">Not playing</string>
     <string name="qs_clock_depth">Clock depth</string>
     <string name="qs_nav_sound">Click sound</string>

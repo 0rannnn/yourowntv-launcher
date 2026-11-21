@@ -126,6 +126,12 @@
     <label class="add">+ הוספת תמונות מהטלפון<input type="file" id="photos" accept="image/*" multiple></label>
   </div>
 
+  <h2>סידור תקלות</h2>
+  <div class="card">
+    <p class="note">את הדוח יוצרים בטלוויזיה: חלונית ההגדרות > סידור תקלות > יצירת דוח. כאן מורידים אותו ושולחים לקלוד.</p>
+    <button class="reset" id="report">הורדת דוח התקלות</button>
+  </div>
+
   <h2>הגדרות הערכה</h2>
   <div class="card" id="settings"></div>
 </main>
@@ -451,6 +457,16 @@ function renderSettings() {
     box.append(row);
   }
 }
+
+$('report').onclick = async () => {
+  try {
+    const r = await api('/api/report');
+    const blob = new Blob([r.text], { type: 'text/plain' });
+    const file = new File([blob], 'tv-report.txt', { type: 'text/plain' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: 'tv-report.txt' }); return; }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'tv-report.txt'; a.click();
+  } catch (e) { toast(e.message); }
+};
 
 $('save').onclick = async () => {
   if (!Object.keys(changes).length) return;

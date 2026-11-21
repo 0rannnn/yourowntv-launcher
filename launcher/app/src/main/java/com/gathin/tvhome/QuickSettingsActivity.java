@@ -173,6 +173,9 @@ public final class QuickSettingsActivity extends Activity {
         // Edit from the phone: a QR code and a 4-digit code, in place of the panel (PhoneEditor).
         View phone = addTile(tiles, R.drawable.ic_phone_edit, getString(R.string.qs_phone_edit), null, null);
         phone.setOnClickListener(v -> showPhoneCard());
+        // Troubleshooting: the computer reaches this TV from anywhere (Tailscale + the repair channel), and a report.
+        View fix = addTile(tiles, R.drawable.ic_troubleshoot, getString(R.string.qs_fix), null, null);
+        fix.setOnClickListener(v -> showFixCard());
         // Through Home, so it rebuilds with the new choices when Launcher settings closes.
         addTile(tiles, R.drawable.ic_home_settings, getString(R.string.qs_launcher), null,
                 listOf(new Intent(this, MainActivity.class).setAction(MainActivity.ACTION_LAUNCHER_SETTINGS)));
@@ -680,7 +683,29 @@ public final class QuickSettingsActivity extends Activity {
         phoneCard = card;
     }
 
+    private TroubleshootCard fixCard;
+
+    /** The Troubleshooting card in place of the panel, as the phone card (closePhoneCard and Back close it). */
+    private void showFixCard() {
+        fixCard = TroubleshootCard.create(this);
+        View card = fixCard.build(this::closePhoneCard);
+        FrameLayout.LayoutParams cardLp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER);
+        View panel = findViewById(R.id.panel);
+        panel.animate().alpha(0f).setDuration(160).withEndAction(() -> panel.setVisibility(View.INVISIBLE)).start();
+        ((FrameLayout) findViewById(R.id.scrim)).addView(card, cardLp);
+        card.setAlpha(0f);
+        card.setScaleX(0.96f);
+        card.setScaleY(0.96f);
+        card.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(220).setInterpolator(Motion.ENTER).start();
+        phoneCard = card;
+    }
+
     private void closePhoneCard() {
+        if (fixCard != null) {
+            fixCard.stop();
+            fixCard = null;
+        }
         if (phoneCard == null) return;
         ((ViewGroup) phoneCard.getParent()).removeView(phoneCard);
         phoneCard = null;

@@ -32,6 +32,8 @@
     <queries>
         <!-- The setup app starts the shell watcher for holding a volume key when Home asks (VolumeHold). -->
         <package android:name="com.gathin.kit" />
+        <!-- Troubleshooting: whether Tailscale is installed, to open it. -->
+        <package android:name="com.tailscale.ipn" />
         <!-- The standard settings handlers, so package visibility doesn't hide them and send the pills to a vendor fallback by mistake. -->
         <intent>
             <action android:name="android.settings.SETTINGS" />

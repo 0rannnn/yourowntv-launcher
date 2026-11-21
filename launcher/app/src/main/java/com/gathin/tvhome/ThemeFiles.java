@@ -48,7 +48,8 @@ final class ThemeFiles {
             return Config.FILE_NAME.equals(name) || "wallpaper.jpg".equals(name) || "theme_revision".equals(name)
                     || HeaderExtras.CLOCK_FONT.equals(name) || NavSound.FILE.equals(name)
                     || HebrewFont.FILE.equals(name) || Ps5Home.AVATAR.equals(name)
-                    || OrderImport.IMPORT.equals(name) || OrderImport.BACKUP.equals(name) ? name : null;
+                    || OrderImport.IMPORT.equals(name) || OrderImport.BACKUP.equals(name)
+                    || TroubleshootCard.REPORT.equals(name) ? name : null;
         }
         if (segments.size() == 2 && Ps5Home.ART.equals(segments.get(0)) && collectionImage(segments.get(1))) {
             return Ps5Home.ART + "/" + segments.get(1);
