@@ -61,6 +61,7 @@ final class VolumeHold {
         new Thread(hold::serve, "volume-hold").start();
         // No watcher a little after Home starts (after a reboot, or a TV set up before this): the setup app starts it.
         hold.main.postDelayed(hold.askForWatcher, 15_000);
+        hold.main.post(hold.sample);
     }
 
     static synchronized void stop() {
@@ -139,9 +140,19 @@ final class VolumeHold {
         release();
         heldKey = direction;
         long startedAt = SystemClock.uptimeMillis();
+        int before = earlierLevel;
         repeat = new Runnable() {
             @Override
             public void run() {
+                if (SystemClock.uptimeMillis() - startedAt < DELAY_MS + INTERVAL_MS) {
+                    // The first step only. The helper got this key itself (Xiaomi, TCL): it repeats a held key, so
+                    // this stands aside. And a press the TV did not take (the level did not move: a stray signal
+                    // from another device) is never turned into a run of steps.
+                    if (SystemClock.uptimeMillis() - VolumeKeys.lastKeyAt < 1500 || level() == before) {
+                        release();
+                        return;
+                    }
+                }
                 // Stops by itself: at the top or the bottom, and after MAX_HOLD_MS even if the release never came.
                 if (SystemClock.uptimeMillis() - startedAt > MAX_HOLD_MS + DELAY_MS) {
                     release();
@@ -167,6 +178,32 @@ final class VolumeHold {
         if (repeat != null) main.removeCallbacks(repeat);
         repeat = null;
         heldKey = 0;
+    }
+
+    /**
+     * The volume a little before now (sampled every 100 ms, 200 ms old): what it was before the press, even when the
+     * TV took its first step before the press reached here.
+     */
+    private volatile int earlierLevel = -1;
+    private int recentLevel = -1;
+    private final Runnable sample = new Runnable() {
+        @Override
+        public void run() {
+            if (!running) return;
+            if (heldKey == 0) {
+                earlierLevel = recentLevel;
+                recentLevel = level();
+            }
+            main.postDelayed(this, 100);
+        }
+    };
+
+    private int level() {
+        try {
+            return audio.getStreamVolume(AudioManager.STREAM_MUSIC);
+        } catch (RuntimeException e) {
+            return -1;
+        }
     }
 
     /** For the meter: true while a key is held through the watcher. */

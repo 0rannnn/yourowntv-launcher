@@ -62,6 +62,7 @@ public class InputKeyService extends AccessibilityService {
 
     @Override
     protected boolean onKeyEvent(KeyEvent event) {
+        if (VolumeKeys.direction(event.getKeyCode()) != 0) VolumeKeys.lastKeyAt = android.os.SystemClock.uptimeMillis();
         if (consumeVolumeKeys && VolumeKeys.handle(this, event)) return true;
         // A scancode entry is more specific than any keycode, so it goes first.
         if (RemoteKeys.handle(this, event, appScancodes.get(event.getScanCode()),

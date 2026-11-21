@@ -18,6 +18,10 @@ import android.view.KeyEvent;
 final class VolumeKeys {
     static final long REPEAT_DELAY_MS = 500;
     static final long REPEAT_INTERVAL_MS = 60;
+    /** A repeat never runs longer than this, even if the key's release never arrives (it stopped at 0 on a Xiaomi). */
+    static final long MAX_REPEAT_MS = 4000;
+    /** When the helper last received a volume key itself: then VolumeHold (the shell watcher) stands aside. */
+    static volatile long lastKeyAt;
 
     /** Created on first use, so the class loads in JVM tests that only call the pure methods. */
     private static Handler handler;
@@ -41,16 +45,37 @@ final class VolumeKeys {
     /** Swallows a volume key (true) and repeats it while held; any other key is left alone (false). */
     static boolean handle(Context context, KeyEvent event) {
         int direction = direction(event.getKeyCode());
-        if (direction == 0) return false;
+        if (direction == 0) {
+            // Any other key going down ends a repeat in progress.
+            if (event.getAction() == KeyEvent.ACTION_DOWN) stop();
+            return false;
+        }
+        lastKeyAt = android.os.SystemClock.uptimeMillis();
         if (!changesPress(event.getAction(), event.getRepeatCount())) return true;
         stop();
         if (event.getAction() != KeyEvent.ACTION_DOWN) return true;
         AudioManager audio = context.getSystemService(AudioManager.class);
         if (audio == null) return true;
         if (handler == null) handler = new Handler(Looper.getMainLooper());
+        long startedAt = android.os.SystemClock.uptimeMillis();
         step = new Runnable() {
             @Override
             public void run() {
+                // Stops by itself: at the top or the bottom, and after MAX_REPEAT_MS even if the release never came.
+                if (android.os.SystemClock.uptimeMillis() - startedAt > REPEAT_DELAY_MS + MAX_REPEAT_MS) {
+                    stop();
+                    return;
+                }
+                try {
+                    int now = audio.getStreamVolume(AudioManager.STREAM_MUSIC);
+                    int max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+                    if ((direction == AudioManager.ADJUST_RAISE && now >= max)
+                            || (direction == AudioManager.ADJUST_LOWER && now <= 0)) {
+                        stop();
+                        return;
+                    }
+                } catch (RuntimeException ignored) {
+                }
                 audio.adjustVolume(direction, AudioManager.FLAG_SHOW_UI);
                 handler.postDelayed(this, REPEAT_INTERVAL_MS);
             }

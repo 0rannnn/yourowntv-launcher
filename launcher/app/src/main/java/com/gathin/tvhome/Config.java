@@ -604,6 +604,10 @@ final class Config {
             keyFilter = bool(json, "key_filter", keyFilter);
             gamepadPassthrough = bool(json, "gamepad_passthrough", gamepadPassthrough);
             consumeVolumeKeys = bool(json, "consume_volume_keys", consumeVolumeKeys);
+            // Only on TCL, the firmware it was made for (a volume key applied twice): anywhere else (Xiaomi) the TV
+            // keeps its own volume keys and their native repeat, and a lost key release can never run the volume away.
+            if (!android.os.Build.MANUFACTURER.toUpperCase(java.util.Locale.ROOT).contains("TCL")
+                    && !android.os.Build.BRAND.toUpperCase(java.util.Locale.ROOT).contains("TCL")) consumeVolumeKeys = false;
             powerOnHome = bool(json, "power_on_home", powerOnHome);
             homeLongPressHome = bool(json, "home_long_press_home", homeLongPressHome);
             powerOnHomeAlways = bool(json, "power_on_home_always", powerOnHomeAlways);

@@ -264,6 +264,7 @@ public class HomeKeyService extends AccessibilityService {
                 && event.getKeyCode() != KeyEvent.KEYCODE_POWER && event.getKeyCode() != KeyEvent.KEYCODE_WAKEUP) {
             powerOnUntil = 0;
         }
+        if (VolumeKeys.direction(event.getKeyCode()) != 0) VolumeKeys.lastKeyAt = android.os.SystemClock.uptimeMillis();
         VolumeMeter.onKey(event);
         if (consumeVolumeKeys && VolumeKeys.handle(this, event)) return true;
         // A scancode entry is more specific than any keycode, so it goes first.
