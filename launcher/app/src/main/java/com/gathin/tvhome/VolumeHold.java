@@ -37,7 +37,13 @@ final class VolumeHold {
      */
     static final long MAX_HOLD_MS = 4000;
     /** On an external sound device (a soundbar): a longer wait before the first extra step, and checks for its report. */
-    static final long EXTERNAL_DELAY_MS = 600;
+    static final long EXTERNAL_DELAY_MS = 400;
+    /**
+     * How many steps may be on their way to an external device at once. Its report of each step comes back about half
+     * a second later, so one at a time crawled at 2 steps a second; three at a time triple that, and after the
+     * release at most these few still land.
+     */
+    static final int EXTERNAL_IN_FLIGHT = 3;
     static final long EXTERNAL_POLL_MS = 80;
     /** A soundbar takes a few steps a second: a hold from the bottom to the top takes longer than on the speaker. */
     static final long EXTERNAL_MAX_HOLD_MS = 30_000;
@@ -153,13 +159,15 @@ final class VolumeHold {
         long delay = external ? EXTERNAL_DELAY_MS : DELAY_MS;
         long maxHold = external ? EXTERNAL_MAX_HOLD_MS : MAX_HOLD_MS;
         repeat = new Runnable() {
-            private int waitingFor = -1;
-            private long sentAt;
+            /** External device: steps sent and not yet reported, the level last seen, when the last report came. */
+            private int inFlight;
+            private int seen = -1;
+            private long lastProgress;
 
             @Override
             public void run() {
                 long now = SystemClock.uptimeMillis();
-                if (now - startedAt < delay + INTERVAL_MS && waitingFor < 0) {
+                if (now - startedAt < delay + INTERVAL_MS && seen < 0) {
                     // The first step only. The helper swallows this key and repeats it itself (TCL): this stands
                     // aside. On the TV's speaker, a press the TV did not take (the level did not move: a stray signal
                     // from another device) is never turned into a run of steps.
@@ -180,14 +188,32 @@ final class VolumeHold {
                         release();
                         return;
                     }
-                    if (external && waitingFor >= 0 && level == waitingFor && now - sentAt < 1500) {
-                        // The device has not taken the last step yet: wait for it.
+                    if (external) {
+                        // Each step the device reports takes one off the steps on their way; nothing reported for
+                        // a while (a step it dropped) frees them all, so a hold never stalls.
+                        if (seen >= 0) {
+                            int moved = direction == AudioManager.ADJUST_RAISE ? level - seen : seen - level;
+                            if (moved > 0) {
+                                inFlight = Math.max(0, inFlight - moved);
+                                lastProgress = now;
+                            } else if (now - lastProgress > 1200) {
+                                inFlight = 0;
+                                lastProgress = now;
+                            }
+                        } else {
+                            lastProgress = now;
+                        }
+                        seen = level;
+                        if (inFlight >= EXTERNAL_IN_FLIGHT) {
+                            main.postDelayed(this, EXTERNAL_POLL_MS);
+                            return;
+                        }
+                        audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, direction, 0);
+                        inFlight++;
                         main.postDelayed(this, EXTERNAL_POLL_MS);
                         return;
                     }
                     audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, direction, 0);
-                    waitingFor = level;
-                    sentAt = now;
                 } catch (RuntimeException ignored) {
                 }
                 main.postDelayed(this, external ? EXTERNAL_POLL_MS : INTERVAL_MS);
