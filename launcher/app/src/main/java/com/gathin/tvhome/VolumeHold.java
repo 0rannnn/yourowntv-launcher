@@ -29,24 +29,15 @@ import java.nio.charset.StandardCharsets;
 final class VolumeHold {
     private static final String TAG = "VolumeHold";
     static final int PORT = 8897;
-    static final long DELAY_MS = 350;
-    static final long INTERVAL_MS = 50;
+    /** A press shorter than this stays the TV's single step; holding longer starts our repeat. */
+    static final long DELAY_MS = 300;
+    /** One step every 30 ms while held: about 33 steps a second, 0 to 100 in about 3 seconds. */
+    static final long INTERVAL_MS = 30;
     /**
      * A repeat never runs longer than this, whatever happens to the key's release (a lost "up" line, the watcher
      * going away): 4 seconds take the volume from 0 to the top, and holding on just keeps it there.
      */
     static final long MAX_HOLD_MS = 4000;
-    /** On an external sound device (a soundbar): a longer wait before the first extra step, and checks for its report. */
-    static final long EXTERNAL_DELAY_MS = 400;
-    /**
-     * How many steps may be on their way to an external device at once. Its report of each step comes back about half
-     * a second later, so one at a time crawled at 2 steps a second; three at a time triple that, and after the
-     * release at most these few still land.
-     */
-    static final int EXTERNAL_IN_FLIGHT = 3;
-    static final long EXTERNAL_POLL_MS = 80;
-    /** A soundbar takes a few steps a second: a hold from the bottom to the top takes longer than on the speaker. */
-    static final long EXTERNAL_MAX_HOLD_MS = 30_000;
     private static VolumeHold active;
     /** Whether the shell watcher is connected now (when not, Home asks the setup app to start it). */
     static volatile boolean live;
@@ -149,35 +140,31 @@ final class VolumeHold {
 
     private void press(int direction) {
         release();
+        // Sound on an external device (a soundbar over HDMI ARC/eARC, Bluetooth): nothing of ours, ever. Its volume
+        // goes over HDMI-CEC to that device, and Oran's rule is never to touch eARC; a held key there is the TV's and
+        // the device's own business (and nothing of ours can run on after the release).
+        if (externalOutput()) return;
         heldKey = direction;
         long startedAt = SystemClock.uptimeMillis();
         int before = earlierLevel;
-        // Sound on an external device (a soundbar over HDMI ARC/eARC, Bluetooth): its volume is set by that device,
-        // one HDMI-CEC message per step, slowly. There a held key gets one step at a time, the next only once the
-        // device has reported the last one (never more than one waiting there, so nothing runs on after the release).
-        boolean external = externalOutput();
-        long delay = external ? EXTERNAL_DELAY_MS : DELAY_MS;
-        long maxHold = external ? EXTERNAL_MAX_HOLD_MS : MAX_HOLD_MS;
         repeat = new Runnable() {
-            /** External device: steps sent and not yet reported, the level last seen, when the last report came. */
-            private int inFlight;
-            private int seen = -1;
-            private long lastProgress;
+            private boolean first = true;
 
             @Override
             public void run() {
                 long now = SystemClock.uptimeMillis();
-                if (now - startedAt < delay + INTERVAL_MS && seen < 0) {
-                    // The first step only. The helper swallows this key and repeats it itself (TCL): this stands
-                    // aside. On the TV's speaker, a press the TV did not take (the level did not move: a stray signal
-                    // from another device) is never turned into a run of steps.
-                    if ((VolumeKeys.consuming && now - VolumeKeys.lastKeyAt < 1500) || (!external && level() == before)) {
+                if (first) {
+                    first = false;
+                    // The helper swallows this key and repeats it itself (TCL): this stands aside. And a press the TV
+                    // did not take (the level did not move: a stray signal from another device) never becomes a run.
+                    if ((VolumeKeys.consuming && now - VolumeKeys.lastKeyAt < 1500) || level() == before) {
                         release();
                         return;
                     }
                 }
-                // Stops by itself: at the top or the bottom, and after the longest hold even if the release never came.
-                if (now - startedAt > maxHold + delay) {
+                // Stops by itself: at the release (release()), at the top or the bottom, if the sound moves to an
+                // external device meanwhile, and after MAX_HOLD_MS even if the release never came.
+                if (now - startedAt > MAX_HOLD_MS + DELAY_MS || externalOutput()) {
                     release();
                     return;
                 }
@@ -188,38 +175,13 @@ final class VolumeHold {
                         release();
                         return;
                     }
-                    if (external) {
-                        // Each step the device reports takes one off the steps on their way; nothing reported for
-                        // a while (a step it dropped) frees them all, so a hold never stalls.
-                        if (seen >= 0) {
-                            int moved = direction == AudioManager.ADJUST_RAISE ? level - seen : seen - level;
-                            if (moved > 0) {
-                                inFlight = Math.max(0, inFlight - moved);
-                                lastProgress = now;
-                            } else if (now - lastProgress > 1200) {
-                                inFlight = 0;
-                                lastProgress = now;
-                            }
-                        } else {
-                            lastProgress = now;
-                        }
-                        seen = level;
-                        if (inFlight >= EXTERNAL_IN_FLIGHT) {
-                            main.postDelayed(this, EXTERNAL_POLL_MS);
-                            return;
-                        }
-                        audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, direction, 0);
-                        inFlight++;
-                        main.postDelayed(this, EXTERNAL_POLL_MS);
-                        return;
-                    }
                     audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, direction, 0);
                 } catch (RuntimeException ignored) {
                 }
-                main.postDelayed(this, external ? EXTERNAL_POLL_MS : INTERVAL_MS);
+                main.postDelayed(this, INTERVAL_MS);
             }
         };
-        main.postDelayed(repeat, delay);
+        main.postDelayed(repeat, DELAY_MS);
     }
 
     private void release() {
@@ -246,14 +208,28 @@ final class VolumeHold {
         }
     };
 
-    /** Whether media plays on something other than the TV's own speaker (HDMI ARC/eARC, Bluetooth, USB, line out). */
     private boolean externalOutput() {
+        return externalOutput(context);
+    }
+
+    /** Whether media plays on something other than the TV's own speaker (HDMI ARC/eARC, Bluetooth, USB, line out). */
+    static boolean externalOutput(Context context) {
+        AudioManager audio = context.getSystemService(AudioManager.class);
+        if (audio == null) return false;
         try {
             android.media.AudioAttributes media = new android.media.AudioAttributes.Builder()
                     .setUsage(android.media.AudioAttributes.USAGE_MEDIA).build();
             if (android.os.Build.VERSION.SDK_INT >= 33) {
                 for (android.media.AudioDeviceInfo d : audio.getAudioDevicesForAttributes(media)) {
                     if (d.getType() != android.media.AudioDeviceInfo.TYPE_BUILTIN_SPEAKER) return true;
+                }
+            } else {
+                // Older Android cannot say where media plays: a connected ARC/eARC or Bluetooth audio device counts
+                // as external, to be safe (never touch eARC).
+                for (android.media.AudioDeviceInfo d : audio.getDevices(AudioManager.GET_DEVICES_OUTPUTS)) {
+                    int t = d.getType();
+                    if (t == android.media.AudioDeviceInfo.TYPE_HDMI_ARC || t == 29 /* TYPE_HDMI_EARC */
+                            || t == android.media.AudioDeviceInfo.TYPE_BLUETOOTH_A2DP) return true;
                 }
             }
         } catch (Throwable ignored) {

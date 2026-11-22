@@ -16,8 +16,8 @@ import android.view.KeyEvent;
  * same press, and the second call restarts the same repeat instead of adding a second one.
  */
 final class VolumeKeys {
-    static final long REPEAT_DELAY_MS = 500;
-    static final long REPEAT_INTERVAL_MS = 60;
+    static final long REPEAT_DELAY_MS = 350;
+    static final long REPEAT_INTERVAL_MS = 35;
     /** A repeat never runs longer than this, even if the key's release never arrives (it stopped at 0 on a Xiaomi). */
     static final long MAX_REPEAT_MS = 4000;
     /** When the helper last received a volume key itself: then VolumeHold (the shell watcher) stands aside. */
@@ -53,6 +53,12 @@ final class VolumeKeys {
             return false;
         }
         lastKeyAt = android.os.SystemClock.uptimeMillis();
+        // Sound on an external device (soundbar over HDMI ARC/eARC, Bluetooth): never ours to step (Oran's rule:
+        // never touch eARC). The key goes on to the TV untouched.
+        if (VolumeHold.externalOutput(context)) {
+            stop();
+            return false;
+        }
         if (!changesPress(event.getAction(), event.getRepeatCount())) return true;
         stop();
         if (event.getAction() != KeyEvent.ACTION_DOWN) return true;
