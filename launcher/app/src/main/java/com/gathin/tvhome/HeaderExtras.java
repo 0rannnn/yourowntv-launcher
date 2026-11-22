@@ -143,6 +143,9 @@ final class HeaderExtras {
         }
         if (weather) addWeatherViews(clock);
         placeCornerClock();
+        // The corner clock (greeting, time, date, weather, with their shadows) the same way: a ready-made picture.
+        View block = activity.findViewById(R.id.leftBlock);
+        if (block != null) block.setLayerType(View.LAYER_TYPE_HARDWARE, null);
     }
 
     private void applyClockFont(TextView clock) {
@@ -277,6 +280,11 @@ final class HeaderExtras {
         int at = cutOut != null ? root.indexOfChild(cutOut) : root.indexOfChild(activity.findViewById(R.id.sky)) + 1;
         root.addView(line, Math.max(at, 0), lineLp);
         root.addView(clock, Math.max(at, 0), clockLp);
+        // The digits are huge text drawn twice with gradients (GlassClock): kept as ready-made pictures, so scrolling
+        // the apps only copies them (they are drawn again when the minute or the glass changes), instead of drawing
+        // them again on every frame (that alone cost about 15 ms a frame on the projector).
+        clock.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+        line.setLayerType(View.LAYER_TYPE_HARDWARE, null);
         HebrewFont.apply(line);
     }
 

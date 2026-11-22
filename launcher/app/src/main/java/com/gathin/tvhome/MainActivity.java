@@ -405,6 +405,32 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
     private java.util.Map<Integer, String> homeAppKeys = java.util.Collections.emptyMap();
 
+    /**
+     * The picture, the centred clock behind its cut-out and the cut-out itself (the root's first children, up to the
+     * cut-out) into one container kept as a ready-made picture (a hardware layer). Scrolling the apps then copies one
+     * full-screen image per frame instead of drawing three or four on top of each other (the projector's weak GPU
+     * spent most of each scrolling frame on them). The container is drawn again only when something in it changes: a
+     * new photo, the minute, the glass slider.
+     */
+    private void mergeBackdrop(FrameLayout root) {
+        View cut = root.findViewWithTag(WallpaperPlayer.FOREGROUND_TAG);
+        if (cut == null || cut.getParent() != root) return;
+        int end = root.indexOfChild(cut);
+        if (end < 1) return;
+        List<View> moved = new ArrayList<>();
+        for (int i = 0; i <= end; i++) moved.add(root.getChildAt(i));
+        FrameLayout backdrop = new FrameLayout(this);
+        backdrop.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        for (View v : moved) {
+            ViewGroup.LayoutParams lp = v.getLayoutParams();
+            root.removeView(v);
+            backdrop.addView(v, lp);
+        }
+        root.addView(backdrop, 0, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
+        backdrop.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -503,6 +529,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         localeRevision = LauncherLocale.revision;
         headerExtras = new HeaderExtras(this);
         headerExtras.attach(findViewById(R.id.clock));
+        mergeBackdrop(root);
         // The glass clock firms up over a dark or busy photo, following the rotation.
         wallpaperPlayer.setOnShown(headerExtras::photoSolidity);
         navSound = NavSound.load(this);
@@ -804,10 +831,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 Motion.reduce(s);
             } else if (!focusOvershoot) {
                 // Critically damped: glides straight onto the tile without swinging past it.
-                s.setSpring(new SpringForce().setStiffness(advancedEffects ? 520f : 440f).setDampingRatio(1f));
+                s.setSpring(new SpringForce().setStiffness(1100f).setDampingRatio(1f));
             } else {
-                s.setSpring(new SpringForce().setStiffness(advancedEffects ? 320f : 260f)
-                        .setDampingRatio(advancedEffects ? 0.76f : 0.58f));
+                s.setSpring(new SpringForce().setStiffness(800f).setDampingRatio(0.8f));
             }
         }
 

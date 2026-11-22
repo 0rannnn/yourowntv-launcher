@@ -27,10 +27,19 @@ final class Motion {
     /** Things leaving (a panel closing): gathers speed, gone before it drags. */
     static final Interpolator EXIT = new PathInterpolator(0.3f, 0f, 0.8f, 0.15f);
 
-    /** How long a row's scroll to the focused tile takes: longer for longer moves, within 220 to 380 ms. */
+    /**
+     * How long a row's scroll to the focused tile takes: 110 to 200 ms, longer for longer moves; 80 ms when the
+     * presses come quickly (a held arrow key), so the row keeps up with the remote instead of trailing behind it.
+     */
     static int scrollMs(int distancePx, float density) {
-        return Math.round(Math.max(220f, Math.min(380f, 220f + Math.abs(distancePx) / density * 0.35f)));
+        long now = android.os.SystemClock.uptimeMillis();
+        boolean quick = now - lastScroll < 260;
+        lastScroll = now;
+        if (quick) return 80;
+        return Math.round(Math.max(110f, Math.min(200f, 110f + Math.abs(distancePx) / density * 0.18f)));
     }
+
+    private static long lastScroll;
 
     private Motion() {
     }

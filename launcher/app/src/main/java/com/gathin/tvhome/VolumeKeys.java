@@ -64,7 +64,7 @@ final class VolumeKeys {
         if (event.getAction() != KeyEvent.ACTION_DOWN) return true;
         AudioManager audio = context.getSystemService(AudioManager.class);
         if (audio == null) return true;
-        if (handler == null) handler = new Handler(Looper.getMainLooper());
+        if (handler == null) handler = VolumeThread.get();
         long startedAt = android.os.SystemClock.uptimeMillis();
         step = new Runnable() {
             @Override

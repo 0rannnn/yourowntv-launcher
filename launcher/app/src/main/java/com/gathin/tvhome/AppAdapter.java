@@ -1055,17 +1055,17 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
                     view.animate().scaleX(s).scaleY(s)
                             .translationY(focused && advancedEffects ? -4f * density : 0f)
                             .translationZ(focused && advancedEffects ? 8f * density : 0f)
-                            .setDuration(advancedEffects ? (focused ? 220 : 170) : (focused ? 260 : 180))
+                            .setDuration(focused ? 140 : 110)
                             .setInterpolator(!focused ? Motion.SETTLE : !overshoot ? Motion.ENTER
                                     : new OvershootInterpolator(advancedEffects ? 0.7f : 1.6f))
                             .withLayer().start();
                     if (advancedEffects) {
                         banner.animate().scaleX(focused ? 1.035f : 1f).scaleY(focused ? 1.035f : 1f)
-                                .setDuration(280).setInterpolator(focused ? Motion.ENTER : Motion.SETTLE).start();
+                                .setDuration(160).setInterpolator(focused ? Motion.ENTER : Motion.SETTLE).start();
                     }
                     name.animate().alpha(focused ? 1f : restNameAlpha)
                             .translationY(focused ? nameDrop : -density * 6f)
-                            .setDuration(220).setInterpolator(Motion.SETTLE).start();
+                            .setDuration(140).setInterpolator(Motion.SETTLE).start();
                 }
                 int pos = getBindingAdapterPosition();
                 if (focused && listener != null && pos != RecyclerView.NO_POSITION) {

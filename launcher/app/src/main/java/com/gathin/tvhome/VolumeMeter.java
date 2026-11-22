@@ -55,6 +55,8 @@ final class VolumeMeter {
     private final AudioManager audio;
     private final WindowManager windows;
     private final Handler main = new Handler(Looper.getMainLooper());
+    /** The checks (calls into the audio service) run here, off the thread that draws Home (VolumeThread). */
+    private final Handler work = VolumeThread.get();
     private final float density;
     private BroadcastReceiver receiver;
     private ContentObserver observer;
@@ -63,14 +65,14 @@ final class VolumeMeter {
     private Bar bar;
     private TextView number;
     private boolean added;
-    private int last = Integer.MIN_VALUE;
+    private volatile int last = Integer.MIN_VALUE;
     private final Runnable hide = this::hide;
     /** A look at the level four times a second: some firmware (Formovie) changes it with no broadcast at all. */
     private final Runnable poll = new Runnable() {
         @Override
         public void run() {
-            show(false);
-            main.postDelayed(this, POLL_MS);
+            check(false);
+            work.postDelayed(this, POLL_MS);
         }
     };
     private static final long POLL_MS = 100;
@@ -104,7 +106,7 @@ final class VolumeMeter {
         int code = event.getKeyCode();
         if (code == KeyEvent.KEYCODE_VOLUME_UP || code == KeyEvent.KEYCODE_VOLUME_DOWN
                 || code == KeyEvent.KEYCODE_VOLUME_MUTE) {
-            meter.main.postDelayed(() -> meter.show(true), 120);
+            meter.work.postDelayed(() -> meter.check(true), 120);
         }
     }
 
@@ -115,11 +117,11 @@ final class VolumeMeter {
 
     private void start() {
         last = level();
-        main.postDelayed(poll, POLL_MS);
+        work.postDelayed(poll, POLL_MS);
         receiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
-                show(false);
+                work.post(() -> check(false));
             }
         };
         IntentFilter filter = new IntentFilter(VOLUME_CHANGED);
@@ -130,7 +132,7 @@ final class VolumeMeter {
         observer = new ContentObserver(main) {
             @Override
             public void onChange(boolean selfChange) {
-                show(false);
+                work.post(() -> check(false));
             }
         };
         try {
@@ -142,6 +144,7 @@ final class VolumeMeter {
 
     private void stop() {
         main.removeCallbacksAndMessages(null);
+        work.removeCallbacks(poll);
         try {
             if (receiver != null) service.unregisterReceiver(receiver);
         } catch (RuntimeException ignored) {
@@ -164,13 +167,25 @@ final class VolumeMeter {
     }
 
     /** From a key: always shown. From a broadcast or a settings change: only when the level really moved. */
-    private void show(boolean fromKey) {
+    /** On the volume thread: the level now; the meter shows it (on the main thread) when it moved or a key asked. */
+    private void check(boolean fromKey) {
         int now = level();
         if (!fromKey && now == last) return;
         last = now;
+        boolean muted;
+        try {
+            muted = now == 0 && audio.isStreamMute(AudioManager.STREAM_MUSIC);
+        } catch (RuntimeException e) {
+            muted = false;
+        }
+        boolean isMuted = muted;
+        main.post(() -> show(now, isMuted));
+    }
+
+    /** On the main thread: the meter drawn for this level. */
+    private void show(int now, boolean muted) {
         try {
             if (pill == null) build();
-            boolean muted = now == 0 && audio.isStreamMute(AudioManager.STREAM_MUSIC);
             icon.setAlpha(muted ? 0.45f : 1f);
             bar.setLevel(Math.max(0, now));
             bar.setVisibility(now < 0 ? View.GONE : View.VISIBLE);

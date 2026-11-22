@@ -44,7 +44,8 @@ final class VolumeHold {
 
     private final Context context;
     private final AudioManager audio;
-    private final Handler main = new Handler(Looper.getMainLooper());
+    /** Every check and step runs on the volume thread, never on the one that draws Home (VolumeThread). */
+    private final Handler main = VolumeThread.get();
     private volatile boolean running = true;
     private ServerSocket server;
     private Runnable repeat;
