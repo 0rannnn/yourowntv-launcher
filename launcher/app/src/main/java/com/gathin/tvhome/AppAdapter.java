@@ -279,6 +279,9 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
      * Rebuilds the tiles. A shown module card stands in for every tile of its package (same component,
      * so focus follows it); hidden_apps wins over a card, and a card's package in dock_apps takes that slot.
      */
+    /** Apps updated or installed since they were last opened from Home (AppUpdates): their tiles get a dot. */
+    private Set<String> updatedPackages = new HashSet<>();
+
     void reload(List<Cards.Card> cards, List<ResolveInfo> leanback) {
         PackageManager pm = ctx.getPackageManager();
         // The LEANBACK query is shared with the module-card check (MainActivity); copy it before adding
@@ -333,6 +336,9 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
                 fresh.add(new Entry(label, component, banner, icon));
             }
         }
+        Set<String> pkgs = new HashSet<>();
+        for (Entry e : fresh) if (e.pkg != null) pkgs.add(e.pkg);
+        updatedPackages = AppUpdates.updated(ctx, pkgs);
         List<String> importing = importPackages;
         Collections.sort(fresh, (a, b) -> {
             // An order being adopted (the TV's own home's, from the setup app) comes before everything else.
@@ -551,7 +557,16 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             h.label.setText(e.label);
             h.label.setVisibility(uniformTiles ? View.GONE : View.VISIBLE);
         }
-        h.card.setOnClickListener(v -> launch(e));
+        boolean dot = (e.kind == Entry.APP || e.kind == Entry.CARD) && e.pkg != null && updatedPackages.contains(e.pkg);
+        h.updateDot.setVisibility(dot ? View.VISIBLE : View.GONE);
+        h.card.setOnClickListener(v -> {
+            launch(e);
+            if (h.updateDot.getVisibility() == View.VISIBLE && e.pkg != null) {
+                AppUpdates.opened(ctx, e.pkg);
+                updatedPackages.remove(e.pkg);
+                h.updateDot.setVisibility(View.GONE);
+            }
+        });
         if (e.kind == Entry.PANEL || e.kind == Entry.LIBRARY) {
             // Plain glass with the white mark, not a fill sampled from the icon; nothing to hold OK for.
             GradientDrawable glass = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
@@ -969,6 +984,8 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         final ImageView icon;
         final TextView label;
         final TextView name;
+        /** AppUpdates' dot: a new version not opened yet. */
+        final View updateDot;
         final boolean animations;
         final boolean advancedEffects;
         final boolean reducedMotion;
@@ -985,6 +1002,7 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             icon = v.findViewById(R.id.icon);
             label = v.findViewById(R.id.label);
             name = v.findViewById(R.id.name);
+            updateDot = v.findViewById(R.id.updateDot);
             this.animations = animations;
             this.advancedEffects = advancedEffects;
             this.reducedMotion = reducedMotion;
