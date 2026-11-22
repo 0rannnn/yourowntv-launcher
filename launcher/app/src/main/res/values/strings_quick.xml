@@ -28,6 +28,7 @@
     <string name="qs_lang_english" translatable="false">English</string>
     <string name="qs_close">Close</string>
     <string name="qs_fix">Troubleshoot</string>
+    <string name="update_notice">New version installed · %1$s</string>
     <string name="qs_fix_title">Troubleshooting</string>
     <string name="qs_fix_ts_on">✓ Tailscale connected: %1$s</string>
     <string name="qs_fix_ts_off">Tailscale is installed but not connected: open it and sign in</string>

@@ -4,6 +4,7 @@
     <string name="qs_bluetooth">בלוטות\'</string>
     <string name="qs_sound">צליל</string>
     <string name="qs_fix">סידור תקלות</string>
+    <string name="update_notice">גרסה חדשה הותקנה · %1$s</string>
     <string name="qs_fix_title">סידור תקלות</string>
     <string name="qs_fix_ts_on">✓ Tailscale מחובר: %1$s</string>
     <string name="qs_fix_ts_off">Tailscale מותקן אבל לא מחובר: לפתוח אותו ולהתחבר</string>

@@ -530,6 +530,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         headerExtras = new HeaderExtras(this);
         headerExtras.attach(findViewById(R.id.clock));
         mergeBackdrop(root);
+        // "New version installed" once, the first time Home opens after an update.
+        UpdateNotice.showIfUpdated(this, root);
         // The glass clock firms up over a dark or busy photo, following the rotation.
         wallpaperPlayer.setOnShown(headerExtras::photoSolidity);
         navSound = NavSound.load(this);
