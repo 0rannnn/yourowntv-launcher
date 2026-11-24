@@ -770,6 +770,7 @@ public final class QuickSettingsActivity extends Activity {
             panel.animate().alpha(in ? 1f : 0f).scaleX(in ? 1f : 0.96f).scaleY(in ? 1f : 0.96f)
                     .setDuration(in ? duration : duration * 2 / 3)
                     .setInterpolator(in ? Motion.ENTER : Motion.EXIT)
+                    .withLayer()   // nothing inside changes while it moves: one texture instead of every tile, per frame
                     .withEndAction(done).start();
             return;
         }
@@ -784,6 +785,7 @@ public final class QuickSettingsActivity extends Activity {
         panel.animate().alpha(in ? 1f : 0f).translationX(in ? 0f : offset)
                 .setDuration(in ? duration : duration * 2 / 3)
                 .setInterpolator(in ? Motion.ENTER : Motion.EXIT)
+                .withLayer()   // the fade otherwise draws the whole panel off-screen on every frame
                 .withEndAction(done).start();
     }
 

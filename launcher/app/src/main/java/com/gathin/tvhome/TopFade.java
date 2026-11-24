@@ -31,8 +31,16 @@ final class TopFade extends RecyclerView.ItemDecoration {
     }
 
     static void attach(RecyclerView grid, float length) {
-        grid.setLayerType(View.LAYER_TYPE_HARDWARE, null);
         grid.addItemDecoration(new TopFade(length));
+        // The layer only while there is a fade to draw (the rows scrolled up): at rest it was a full-size texture
+        // redrawn on every focus change and scroll frame, for nothing.
+        grid.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrolled(@NonNull RecyclerView rv, int dx, int dy) {
+                int want = rv.computeVerticalScrollOffset() > 0 ? View.LAYER_TYPE_HARDWARE : View.LAYER_TYPE_NONE;
+                if (rv.getLayerType() != want) rv.setLayerType(want, null);
+            }
+        });
     }
 
     /** How tall the fade is after scrolling {@code scrolled} pixels: nothing at rest, then up to {@code length}. */

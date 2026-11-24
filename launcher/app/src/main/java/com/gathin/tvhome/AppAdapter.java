@@ -1086,7 +1086,10 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
                             .setDuration(focused ? 140 : 110)
                             .setInterpolator(!focused ? Motion.SETTLE : !overshoot ? Motion.ENTER
                                     : new OvershootInterpolator(advancedEffects ? 0.7f : 1.6f))
-                            .withLayer().start();
+                            .start();
+                    // No withLayer(): the banner zooms inside the card at the same time, so a layer was drawn again
+                    // on every frame of every focus change (a trace on the Formovie: 105 layer redraws in 87 frames),
+                    // costlier than drawing the small card directly.
                     if (advancedEffects) {
                         banner.animate().scaleX(focused ? 1.035f : 1f).scaleY(focused ? 1.035f : 1f)
                                 .setDuration(160).setInterpolator(focused ? Motion.ENTER : Motion.SETTLE).start();

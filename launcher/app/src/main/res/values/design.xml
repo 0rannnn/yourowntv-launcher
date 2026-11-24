@@ -40,6 +40,6 @@
     <dimen name="radius_pill">21dp</dimen>
     <!-- How much a focused control grows, in percent. -->
     <integer name="focus_scale_percent">104</integer>
-    <integer name="motion_fast_ms">160</integer>
-    <integer name="motion_panel_ms">240</integer>
+    <integer name="motion_fast_ms">130</integer>
+    <integer name="motion_panel_ms">200</integer>
 </resources>
