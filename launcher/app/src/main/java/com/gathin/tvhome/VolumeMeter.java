@@ -108,10 +108,79 @@ final class VolumeMeter {
         VolumeMeter meter = active;
         if (meter == null || event.getAction() != KeyEvent.ACTION_DOWN) return;
         int code = event.getKeyCode();
+        if (event.getRepeatCount() == 0 && (code == KeyEvent.KEYCODE_VOLUME_UP || code == KeyEvent.KEYCODE_VOLUME_DOWN)) {
+            pressed(code == KeyEvent.KEYCODE_VOLUME_UP ? 1 : -1);
+        }
         if (code == KeyEvent.KEYCODE_VOLUME_UP || code == KeyEvent.KEYCODE_VOLUME_DOWN
                 || code == KeyEvent.KEYCODE_VOLUME_MUTE) {
             meter.work.postDelayed(() -> meter.check(true), 120);
         }
+    }
+
+    // ---- rapid presses on an external sound device -------------------------------------------------------------
+    // On the balcony Xiaomi (WiiM over HDMI ARC) the WiiM applies about one step every 0.45 s and the TV's level only
+    // follows its reports, so on quick presses the meter trailed the finger and kept moving after it stopped. There
+    // the meter shows where the presses are taking the level at once (one step per press) and ignores reports that
+    // lag behind it, until the device gets there (or goes further, on a held key) or PREDICT_MS pass without a
+    // press. Display only: nothing is sent to the TV or the device.
+
+    /** How long after the last press the meter keeps its own count before showing only what the device reports. */
+    static final long PREDICT_MS = 4000;
+    /** The same press can arrive twice (the key helper and the shell watcher): presses closer than this are one. */
+    static final long SAME_PRESS_MS = 90;
+    private volatile int predicted = -1;
+    private volatile long predictedAt;
+    private volatile int predictedDirection;
+    private static long lastPressAt;
+    private static int lastPressDirection;
+
+    /** A volume key went down (+1 up, -1 down), from the key helper or the shell watcher. */
+    static synchronized void pressed(int direction) {
+        VolumeMeter meter = active;
+        if (meter == null) return;
+        long now = android.os.SystemClock.uptimeMillis();
+        if (direction == lastPressDirection && now - lastPressAt < SAME_PRESS_MS) return;
+        lastPressAt = now;
+        lastPressDirection = direction;
+        meter.work.post(() -> meter.predict(direction, now));
+    }
+
+    /** On the volume thread: one step further than the last count (or the level now), shown at once. */
+    private void predict(int direction, long at) {
+        if (!VolumeHold.externalOutput(service)) return;   // the TV's own speaker answers at once: nothing to do
+        int now = level();
+        if (now < 0) return;
+        int step = 1;
+        try {
+            step = Math.max(1, Math.round(100f / audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)));
+        } catch (RuntimeException ignored) {
+        }
+        // Still counting (a press in the last PREDICT_MS, either way): on from the count, not from the device's level,
+        // which may not have caught up yet.
+        boolean counting = predicted >= 0 && at - predictedAt < PREDICT_MS;
+        int base = counting ? predicted : now;
+        predicted = Math.max(0, Math.min(100, base + direction * step));
+        predictedAt = at;
+        predictedDirection = direction;
+        last = predicted;
+        int shown = predicted;
+        android.util.Log.i("tvhome-volume", "press " + (direction > 0 ? "+" : "-") + ": meter " + shown + " (device " + now + ")");
+        main.post(() -> show(shown, false));
+    }
+
+    /** A reported level while counting: true when it should not be shown (it still lags behind the presses). */
+    private boolean lagging(int reported) {
+        if (predicted < 0) return false;
+        if (android.os.SystemClock.uptimeMillis() - predictedAt >= PREDICT_MS) {
+            predicted = -1;
+            return false;
+        }
+        boolean reached = predictedDirection > 0 ? reported >= predicted : reported <= predicted;
+        if (reached) {
+            predicted = -1;   // the device caught up (or went further): its own number again
+            return false;
+        }
+        return true;
     }
 
     private static boolean enabled(Context ctx) {
@@ -174,6 +243,7 @@ final class VolumeMeter {
     /** On the volume thread: the level now; the meter shows it (on the main thread) when it moved or a key asked. */
     private void check(boolean fromKey) {
         int now = level();
+        if (lagging(now)) return;   // rapid presses on an external device: the count stays on screen
         if (!fromKey && now == last) return;
         last = now;
         boolean muted;

@@ -122,8 +122,12 @@ final class VolumeHold {
             if ("DOWN".equals(state)) main.post(this::release);
             return;
         }
-        if ("DOWN".equals(state)) main.post(() -> press(key));
-        else if ("UP".equals(state)) main.post(this::release);
+        if ("DOWN".equals(state)) {
+            // The meter moves at once with the press (on an external sound device it would otherwise trail the
+            // device's slow reports); nothing is sent anywhere for this.
+            VolumeMeter.pressed(key == AudioManager.ADJUST_RAISE ? 1 : -1);
+            main.post(() -> press(key));
+        } else if ("UP".equals(state)) main.post(this::release);
     }
 
     /** While no watcher is connected: asks the setup app to start one, then again every 5 minutes. */
