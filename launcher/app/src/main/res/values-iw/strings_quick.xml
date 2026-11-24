@@ -56,4 +56,6 @@
     <string name="qs_theme">ערכת נושא</string>
     <!-- AppUpdates: on an app tile, the app was updated and not opened since. -->
     <string name="app_new_version">גרסה חדשה!</string>
+    <!-- On our setup app's tile: the pack's version number. -->
+    <string name="app_version_tag">גרסה %1$s</string>
 </resources>

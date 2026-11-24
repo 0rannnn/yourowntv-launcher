@@ -2,6 +2,27 @@ plugins {
     id 'com.android.application'
 }
 
+// The pack's version, one number for the launcher and the setup app (and version.json online): every commit of
+// phone-kit and wallpaper-editor plus this launcher's own commits since the original project (origin/main..HEAD).
+// It only goes up, so "install -r" always takes the newer build. Without git (or those folders) it stays 9 / 3.0.
+def packVersion = {
+    try {
+        def count = { File dir, String range ->
+            def p = ['git', '-C', dir.path, 'rev-list', '--count', range].execute()
+            def out = p.text.trim()
+            p.waitFor()
+            if (p.exitValue() != 0) throw new GradleException('git ' + dir)
+            out.toInteger()
+        }
+        File launcherRepo = rootDir.parentFile
+        File workspace = launcherRepo.parentFile
+        return count(launcherRepo, 'origin/main..HEAD') + count(new File(workspace, 'phone-kit'), 'HEAD') +
+                count(new File(workspace, 'wallpaper-editor'), 'HEAD')
+    } catch (Exception ignored) {
+        return null
+    }
+}()
+
 android {
     namespace 'com.gathin.tvhome'
     compileSdk 34
@@ -11,8 +32,8 @@ android {
         applicationId providers.gradleProperty('launcherApplicationId').getOrElse('com.gathin.tvhome')
         minSdk 26
         targetSdk 34
-        versionCode 9
-        versionName '3.0'
+        versionCode packVersion ?: 9
+        versionName packVersion != null ? String.valueOf(packVersion) : '3.0'
     }
 
     buildTypes {

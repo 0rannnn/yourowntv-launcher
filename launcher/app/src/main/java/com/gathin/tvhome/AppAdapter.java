@@ -281,6 +281,8 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
      */
     /** Apps updated or installed since they were last opened from Home (AppUpdates): their tiles get a dot. */
     private Set<String> updatedPackages = new HashSet<>();
+    /** Our setup app's version number, shown on its tile; null when unknown. */
+    private String kitVersion;
 
     void reload(List<Cards.Card> cards, List<ResolveInfo> leanback) {
         PackageManager pm = ctx.getPackageManager();
@@ -336,9 +338,11 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
                 fresh.add(new Entry(label, component, banner, icon));
             }
         }
+        // "New version!" and the version number: our setup app's tile only.
         Set<String> pkgs = new HashSet<>();
-        for (Entry e : fresh) if (e.pkg != null) pkgs.add(e.pkg);
+        for (Entry e : fresh) if (AppUpdates.KIT.equals(e.pkg)) pkgs.add(e.pkg);
         updatedPackages = AppUpdates.updated(ctx, pkgs);
+        kitVersion = pkgs.isEmpty() ? null : AppUpdates.kitVersion(ctx);
         List<String> importing = importPackages;
         Collections.sort(fresh, (a, b) -> {
             // An order being adopted (the TV's own home's, from the setup app) comes before everything else.
@@ -559,6 +563,9 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         }
         boolean dot = (e.kind == Entry.APP || e.kind == Entry.CARD) && e.pkg != null && updatedPackages.contains(e.pkg);
         h.updateDot.setVisibility(dot ? View.VISIBLE : View.GONE);
+        boolean versioned = kitVersion != null && AppUpdates.KIT.equals(e.pkg);
+        if (versioned) h.versionTag.setText(ctx.getString(R.string.app_version_tag, kitVersion));
+        h.versionTag.setVisibility(versioned ? View.VISIBLE : View.GONE);
         h.card.setOnClickListener(v -> {
             launch(e);
             if (h.updateDot.getVisibility() == View.VISIBLE && e.pkg != null) {
@@ -986,6 +993,8 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         final TextView name;
         /** AppUpdates' dot: a new version not opened yet. */
         final View updateDot;
+        /** Our setup app's version number at the foot of its tile. */
+        final TextView versionTag;
         final boolean animations;
         final boolean advancedEffects;
         final boolean reducedMotion;
@@ -1003,6 +1012,7 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             label = v.findViewById(R.id.label);
             name = v.findViewById(R.id.name);
             updateDot = v.findViewById(R.id.updateDot);
+            versionTag = v.findViewById(R.id.versionTag);
             this.animations = animations;
             this.advancedEffects = advancedEffects;
             this.reducedMotion = reducedMotion;
