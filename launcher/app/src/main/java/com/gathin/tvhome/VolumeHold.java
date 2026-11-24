@@ -65,6 +65,9 @@ final class VolumeHold {
         // No watcher a little after Home starts (after a reboot, or a TV set up before this): the setup app starts it.
         hold.main.postDelayed(hold.askForWatcher, 15_000);
         hold.main.post(hold.sample);
+        // Notes an external sound device (ARC/eARC, Bluetooth) at once, while it is connected, so the moments after
+        // a later power-on, when ARC is not back yet, already count as external (externalOutput).
+        hold.main.post(() -> externalOutput(hold.context));
     }
 
     static synchronized void stop() {
@@ -213,24 +216,64 @@ final class VolumeHold {
         return externalOutput(context);
     }
 
-    /** Whether media plays on something other than the TV's own speaker (HDMI ARC/eARC, Bluetooth, USB, line out). */
+    /** Remembered once a TV has had its sound on an external device (see externalOutput). */
+    private static final String AUDIO_PREFS = "audio_output";
+    private static final String EXTERNAL_SEEN = "external_seen";
+    private static volatile boolean externalSeen;
+
+    /**
+     * Whether the volume belongs to something other than the TV's own speaker (HDMI ARC/eARC, Bluetooth, USB): then
+     * nothing of ours sends a volume step, ever (Oran's rule: never touch eARC).
+     *
+     * Once a TV has had such a device it stays "external" for good. Asking only where media plays right now was not
+     * enough: on the balcony Xiaomi (a WiiM over HDMI ARC) the ARC link is down for a few seconds after every power-on
+     * while the TV and the WiiM shake hands, Android says "speaker" meanwhile, and on 2026-11-24 a volume key held in
+     * that window let VolumeHold send 24 steps (20:22:34), which the TV then handed to the WiiM when ARC came back.
+     */
     static boolean externalOutput(Context context) {
+        if (externalSeen) return true;
+        android.content.SharedPreferences prefs = context.getSharedPreferences(AUDIO_PREFS, Context.MODE_PRIVATE);
+        if (prefs.getBoolean(EXTERNAL_SEEN, false)) {
+            externalSeen = true;
+            android.util.Log.i("tvhome-volume", "external sound device on this TV (remembered): no volume steps of ours");
+            return true;
+        }
+        if (externalNow(context)) {
+            externalSeen = true;
+            prefs.edit().putBoolean(EXTERNAL_SEEN, true).apply();
+            android.util.Log.i("tvhome-volume", "external sound device on this TV (ARC/eARC/Bluetooth): no volume steps of ours, from now on");
+            return true;
+        }
+        return false;
+    }
+
+    /** Right now: media routed to a non-speaker output, or any ARC/eARC/Bluetooth/USB audio output connected. */
+    private static boolean externalNow(Context context) {
         AudioManager audio = context.getSystemService(AudioManager.class);
         if (audio == null) return false;
         try {
-            android.media.AudioAttributes media = new android.media.AudioAttributes.Builder()
-                    .setUsage(android.media.AudioAttributes.USAGE_MEDIA).build();
             if (android.os.Build.VERSION.SDK_INT >= 33) {
+                android.media.AudioAttributes media = new android.media.AudioAttributes.Builder()
+                        .setUsage(android.media.AudioAttributes.USAGE_MEDIA).build();
                 for (android.media.AudioDeviceInfo d : audio.getAudioDevicesForAttributes(media)) {
                     if (d.getType() != android.media.AudioDeviceInfo.TYPE_BUILTIN_SPEAKER) return true;
                 }
-            } else {
-                // Older Android cannot say where media plays: a connected ARC/eARC or Bluetooth audio device counts
-                // as external, to be safe (never touch eARC).
-                for (android.media.AudioDeviceInfo d : audio.getDevices(AudioManager.GET_DEVICES_OUTPUTS)) {
-                    int t = d.getType();
-                    if (t == android.media.AudioDeviceInfo.TYPE_HDMI_ARC || t == 29 /* TYPE_HDMI_EARC */
-                            || t == android.media.AudioDeviceInfo.TYPE_BLUETOOTH_A2DP) return true;
+            }
+            // Any Android: a connected external sound device counts, wherever media happens to go this second.
+            for (android.media.AudioDeviceInfo d : audio.getDevices(AudioManager.GET_DEVICES_OUTPUTS)) {
+                switch (d.getType()) {
+                    case android.media.AudioDeviceInfo.TYPE_HDMI_ARC:
+                    case 29:   // TYPE_HDMI_EARC
+                    case android.media.AudioDeviceInfo.TYPE_BLUETOOTH_A2DP:
+                    case 26:   // TYPE_BLE_HEADSET
+                    case 27:   // TYPE_BLE_SPEAKER
+                    case android.media.AudioDeviceInfo.TYPE_USB_DEVICE:
+                    case android.media.AudioDeviceInfo.TYPE_USB_HEADSET:
+                        // Not optical (TYPE_LINE_DIGITAL): some TVs always list it, plugged in or not, and it is no
+                        // part of HDMI eARC; counting it would end the fast hold on a TV that only has its speaker.
+                        return true;
+                    default:
+                        break;
                 }
             }
         } catch (Throwable ignored) {
