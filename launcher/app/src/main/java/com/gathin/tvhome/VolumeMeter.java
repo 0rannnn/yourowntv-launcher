@@ -47,7 +47,11 @@ import org.json.JSONObject;
 final class VolumeMeter {
     private static final String VOLUME_CHANGED = "android.media.VOLUME_CHANGED_ACTION";
     private static final String MUTE_CHANGED = "android.media.STREAM_MUTE_CHANGED_ACTION";
-    private static final long SHOW_MS = 2200;
+    /**
+     * Longer than Android's own volume bar stays (3 s after the last change): ours covers it (see the window's
+     * position below), so it must not fade first and let the system's bar show at the end.
+     */
+    private static final long SHOW_MS = 3400;
 
     private static VolumeMeter active;
 
@@ -229,7 +233,10 @@ final class VolumeMeter {
                         | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                 PixelFormat.TRANSLUCENT);
         lp.gravity = Gravity.END | Gravity.CENTER_VERTICAL;
-        lp.x = dp(36);
+        // Over Android TV's own volume bar (VolumeDialogImpl, right edge, centred: on the Formovie x 1728-1920,
+        // y 218-862, its panel about x 1785-1870). The firmware handles the volume keys before any helper sees them,
+        // so its bar cannot be stopped; this overlay is drawn above it and, solid and wide enough, hides it.
+        lp.x = dp(18);
         return lp;
     }
 
@@ -241,7 +248,7 @@ final class VolumeMeter {
         pill.setPadding(dp(14), dp(18), dp(14), dp(16));
         GradientDrawable glass = new GradientDrawable();
         glass.setCornerRadius(dp(36));
-        glass.setColor(0xD91C1C22);
+        glass.setColor(0xFF1C1C22);   // solid: the system's bar underneath must not show through
         glass.setStroke(Math.max(1, dp(1)), 0x33FFFFFF);
         pill.setBackground(glass);
         pill.setElevation(dp(10));
