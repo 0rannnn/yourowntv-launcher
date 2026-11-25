@@ -67,7 +67,10 @@ final class VolumeHold {
         hold.main.post(hold.sample);
         // Notes an external sound device (ARC/eARC, Bluetooth) at once, while it is connected, so the moments after
         // a later power-on, when ARC is not back yet, already count as external (externalOutput).
-        hold.main.post(() -> externalOutput(hold.context));
+        hold.main.post(() -> {
+            // A WiiM on the network is looked for at once, so the first hold already ramps fast (WiimLink).
+            if (externalOutput(hold.context)) WiimLink.findAsync(hold.context, hold.level());
+        });
     }
 
     static synchronized void stop() {
@@ -148,10 +151,10 @@ final class VolumeHold {
 
     private void press(int direction) {
         release();
-        // Sound on an external device (a soundbar over HDMI ARC/eARC, Bluetooth): nothing of ours, ever. Its volume
-        // goes over HDMI-CEC to that device, and Oran's rule is never to touch eARC; a held key there is the TV's and
-        // the device's own business (and nothing of ours can run on after the release).
-        if (externalOutput()) return;
+        if (externalOutput()) {
+            pressExternal(direction);
+            return;
+        }
         heldKey = direction;
         long startedAt = SystemClock.uptimeMillis();
         int before = earlierLevel;
@@ -190,6 +193,154 @@ final class VolumeHold {
             }
         };
         main.postDelayed(repeat, DELAY_MS);
+    }
+
+    // ---- a held key on an external sound device (soundbar / WiiM over HDMI ARC) --------------------------------------
+    // Oran's rule was "never touch eARC"; on 2026-11-25 he OK'd this one exception: hold-to-ramp there. That TV's
+    // firmware stops repeating a held key once our key helper is on (a 6-second hold gave the WiiM 2 steps), and the
+    // helper must stay (the Settings button). So while the key is held we send the steps, but never like the old
+    // runaway (2026-11-21): one step at a time, each only after the device confirms the last (the TV's level moves
+    // on its <Report Audio Status>), so nothing queues; and it stops the moment the key is released (the watcher sees
+    // the real release), at 0 or the top, on any other key, or after EXTERNAL_MAX_MS.
+
+    /** The TV itself sends 2 steps for a press (at once and 0.4 s later): ours start after those. */
+    static final long EXTERNAL_DELAY_MS = 800;
+    /** How long to wait for the device to confirm a step; no answer by then and the hold stops (never a blind step). */
+    static final long EXTERNAL_CONFIRM_MS = 1500;
+    /** A hold never runs longer than this, whatever happens to the release. */
+    static final long EXTERNAL_MAX_MS = 15_000;
+
+    /** The network ramp (a WiiM): it starts this long after the press, after the TV's own first CEC step. */
+    static final long NETWORK_DELAY_MS = 250;
+
+    /**
+     * Steps per second while a key is held on the network ramp, by how long it has been held: slow at first, faster
+     * the longer it is held (as LG TVs do). Over the network a volume is an exact number, so a fast ramp cannot queue.
+     * 2026-11-25, Oran: "make the ramp up come quicker" (was 3/5/8/12 from 1.2 s steps).
+     */
+    static float rampRate(long heldMs) {
+        if (heldMs < 600) return 4f;
+        if (heldMs < 1200) return 7f;
+        if (heldMs < 2000) return 11f;
+        if (heldMs < 3000) return 16f;
+        return 22f;
+    }
+
+    private void pressExternal(int direction) {
+        String wiim = WiimLink.ready();
+        if (wiim == null) {
+            WiimLink.findAsync(context, level());
+        } else {
+            pressNetwork(direction, wiim);
+            return;
+        }
+        heldKey = direction;
+        long startedAt = SystemClock.uptimeMillis();
+        int before = earlierLevel;
+        repeat = new Runnable() {
+            private int waitingFrom = -1;   // the level when our last step went out, -1 when none is in flight
+            private long sentAt;
+
+            @Override
+            public void run() {
+                if (heldKey != direction) return;   // released (release() also removes this)
+                long now = SystemClock.uptimeMillis();
+                if (now - startedAt > EXTERNAL_MAX_MS) {
+                    release();
+                    return;
+                }
+                int level;
+                int max;
+                try {
+                    level = audio.getStreamVolume(AudioManager.STREAM_MUSIC);
+                    max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+                } catch (RuntimeException e) {
+                    release();
+                    return;
+                }
+                if (waitingFrom < 0 && before >= 0 && level == before && now - startedAt < EXTERNAL_DELAY_MS + 100) {
+                    // The TV did not take the press (the level never moved): a stray signal, not a hold.
+                    release();
+                    return;
+                }
+                if (waitingFrom >= 0 && level == waitingFrom) {
+                    // Our last step is not confirmed yet: wait for the device, never stack a second one on it.
+                    if (now - sentAt > EXTERNAL_CONFIRM_MS) {
+                        release();   // the device stopped answering: stop rather than guess
+                        return;
+                    }
+                    main.postDelayed(this, 50);
+                    return;
+                }
+                if ((direction == AudioManager.ADJUST_RAISE && level >= max) || (direction == AudioManager.ADJUST_LOWER && level <= 0)) {
+                    release();
+                    return;
+                }
+                try {
+                    audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, direction, 0);
+                } catch (RuntimeException e) {
+                    release();
+                    return;
+                }
+                waitingFrom = level;
+                sentAt = now;
+                main.postDelayed(this, 50);
+            }
+        };
+        main.postDelayed(repeat, EXTERNAL_DELAY_MS);
+    }
+
+    /** A held key with a WiiM on the network: its volume set directly, faster the longer the key is held. */
+    private void pressNetwork(int direction, String wiim) {
+        heldKey = direction;
+        long startedAt = SystemClock.uptimeMillis();
+        int sign = direction == AudioManager.ADJUST_RAISE ? 1 : -1;
+        repeat = new Runnable() {
+            private int target = -1;
+            private float owed;
+            private long lastAt;
+
+            @Override
+            public void run() {
+                if (heldKey != direction) return;   // released
+                long now = SystemClock.uptimeMillis();
+                if (now - startedAt > EXTERNAL_MAX_MS) {
+                    release();
+                    return;
+                }
+                if (target < 0) {
+                    target = WiimLink.volume(wiim);   // where the press (and the TV's own first step) left it
+                    if (target < 0) {
+                        WiimLink.lost();
+                        release();
+                        return;
+                    }
+                    lastAt = now;
+                }
+                owed += rampRate(now - startedAt) * (now - lastAt) / 1000f;
+                lastAt = now;
+                int steps = (int) owed;
+                if (steps > 0) {
+                    owed -= steps;
+                    int next = Math.max(0, Math.min(100, target + sign * steps));
+                    if (next == target) {   // at 0 or 100
+                        release();
+                        return;
+                    }
+                    // The request itself takes ~150 ms (this thread waits for it): the ramp's natural tick.
+                    if (heldKey != direction) return;
+                    if (!WiimLink.setVolume(wiim, next)) {
+                        WiimLink.lost();
+                        release();
+                        return;
+                    }
+                    target = next;
+                    VolumeMeter.shown(target);
+                }
+                main.postDelayed(this, 40);
+            }
+        };
+        main.postDelayed(repeat, NETWORK_DELAY_MS);
     }
 
     private void release() {

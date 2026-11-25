@@ -168,6 +168,17 @@ final class VolumeMeter {
         main.post(() -> show(shown, false));
     }
 
+    /** The network ramp set the device to this level (0-100): shown at once; the TV's own level follows a moment later. */
+    static void shown(int level) {
+        VolumeMeter meter = active;
+        if (meter == null) return;
+        meter.predictedDirection = level >= Math.max(0, meter.last) ? 1 : -1;
+        meter.predicted = level;
+        meter.predictedAt = android.os.SystemClock.uptimeMillis();
+        meter.last = level;
+        meter.main.post(() -> meter.show(level, false));
+    }
+
     /** A reported level while counting: true when it should not be shown (it still lags behind the presses). */
     private boolean lagging(int reported) {
         if (predicted < 0) return false;
