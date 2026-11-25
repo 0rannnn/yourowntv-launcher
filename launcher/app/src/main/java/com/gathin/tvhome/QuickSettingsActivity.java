@@ -260,7 +260,9 @@ public final class QuickSettingsActivity extends Activity {
             focusLanguage = false;
             language.requestFocus();
         } else {
-            tiles.getChildAt(0).requestFocus();
+            // Not getChildAt(0): in the vision panel that is a group title, which takes no focus (nothing focused,
+            // so the remote moved nothing: Oran, 2026-11-25).
+            firstTile(tiles).requestFocus();
         }
         if (entering) animatePanel(true, null);
         if (getIntent().getBooleanExtra(EXTRA_PHONE_EDIT, false)) findViewById(R.id.scrim).post(this::showPhoneCard);
@@ -799,7 +801,7 @@ public final class QuickSettingsActivity extends Activity {
         panel.setVisibility(View.VISIBLE);
         panel.animate().alpha(1f).setDuration(200).start();
         GridLayout tiles = findViewById(R.id.tiles);
-        if (tiles.getChildCount() > 0) tiles.getChildAt(0).requestFocus();
+        if (tiles.getChildCount() > 0) firstTile(tiles).requestFocus();
     }
 
     private static Bitmap qrCode(String text, int size) {
