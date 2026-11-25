@@ -128,6 +128,8 @@ public final class QuickSettingsActivity extends Activity {
         gear.setOnClickListener(v -> open(listOf(SystemSettings.intent(this, Settings.ACTION_SETTINGS))));
 
         GridLayout tiles = findViewById(R.id.tiles);
+        // vision: six to a row, in three labelled groups (placeTiles), so each group is one tidy row.
+        if (vision) tiles.setColumnCount(6);
         // The top-right buttons' Inputs and Reorder, through Home: it owns the inputs list and the tiles. Wi-Fi,
         // Bluetooth and the TV settings gear are here already.
         if (vision) {
@@ -176,6 +178,14 @@ public final class QuickSettingsActivity extends Activity {
         // Troubleshooting: the computer reaches this TV from anywhere (Tailscale + the repair channel), and a report.
         View fix = addTile(tiles, R.drawable.ic_troubleshoot, getString(R.string.qs_fix), null, null);
         fix.setOnClickListener(v -> showFixCard());
+        // A TV whose own home (Google TV) stays installed under ours: reached only from here, on purpose; the Home
+        // key and the redirect keep it out of sight otherwise (HomeKeyService).
+        if (vision && HomeKeyService.stockHomeComponent(this) != null) {
+            View google = addTile(tiles, R.drawable.ic_google_tv, getString(R.string.qs_google_tv), null, null);
+            google.setOnClickListener(v -> {
+                if (HomeKeyService.visitStockHome(this)) finish();
+            });
+        }
         // Through Home, so it rebuilds with the new choices when Launcher settings closes.
         addTile(tiles, R.drawable.ic_home_settings, getString(R.string.qs_launcher), null,
                 listOf(new Intent(this, MainActivity.class).setAction(MainActivity.ACTION_LAUNCHER_SETTINGS)));
@@ -230,14 +240,16 @@ public final class QuickSettingsActivity extends Activity {
             arrangeTiles(tiles);
             View arrange = findViewById(R.id.qsArrange);
             arrange.setOnClickListener(v -> setArranging(!arranging));
-            arrange.setNextFocusDownId(tiles.getChildAt(0).getId());
+            arrange.setNextFocusDownId(firstTile(tiles).getId());
+        } else {
+            // Up from the top row reaches the gear (vision: placeTiles does it, section headers in between).
+            for (int i = 0; i < tiles.getColumnCount() && i < tiles.getChildCount(); i++) {
+                tiles.getChildAt(i).setNextFocusUpId(R.id.qsGear);
+            }
         }
-        // Up from the top row reaches the gear, Down from the gear and the language button the first tile.
-        for (int i = 0; i < tiles.getColumnCount() && i < tiles.getChildCount(); i++) {
-            tiles.getChildAt(i).setNextFocusUpId(R.id.qsGear);
-        }
-        gear.setNextFocusDownId(tiles.getChildAt(0).getId());
-        language.setNextFocusDownId(tiles.getChildAt(0).getId());
+        // Down from the gear and the language button: the first tile.
+        gear.setNextFocusDownId(firstTile(tiles).getId());
+        language.setNextFocusDownId(firstTile(tiles).getId());
         if (vision) addGlassSlider();
         if (vision && DsHome.on(this)) addIconSizeSlider();
         // Mirroring takes the views out and puts them back, which drops the focus: mirror first, then focus.
@@ -503,21 +515,86 @@ public final class QuickSettingsActivity extends Activity {
         for (View tile : panelTiles) tile.setOnKeyListener(this::arrangeKey);
     }
 
-    /** Lays the grid out from panelTiles, row by row, each row from the right in Hebrew (as addVisionTile does). */
+    // ---- the vision panel's three groups (Oran, 2026-11-25: "make the middle section more organized") ----------
+
+    /** Which group a tile belongs to, by its key: 0 connections, 1 Home screen, 2 tools (anything else). */
+    static int section(String key) {
+        switch (key) {
+            case "network": case "ic_bluetooth": case "ic_input": case "ic_volume": case "ic_picture": case "ic_keystone":
+                return 0;
+            case "ic_theme": case "ic_wallpaper": case "ic_rotate": case "ic_depth": case "ic_swap_vert": case "ic_home_settings":
+                return 1;
+            default:
+                return 2;
+        }
+    }
+
+    private static final int[] SECTION_TITLES = {R.string.qs_section_connect, R.string.qs_section_home, R.string.qs_section_tools};
+
+    /** The first tile in the grid (headers are not tiles). */
+    private View firstTile(GridLayout tiles) {
+        if (!panelTiles.isEmpty()) {
+            for (int s = 0; s < SECTION_TITLES.length; s++) {
+                for (View tile : panelTiles) if (section(key(tile)) == s) return tile;
+            }
+        }
+        return tiles.getChildAt(0);
+    }
+
+    /** panelTiles put back in group order, each group keeping its own order (after a move inside a group). */
+    private void groupTiles() {
+        List<View> ordered = new ArrayList<>();
+        for (int s = 0; s < SECTION_TITLES.length; s++) {
+            for (View tile : panelTiles) if (section(key(tile)) == s) ordered.add(tile);
+        }
+        panelTiles.clear();
+        panelTiles.addAll(ordered);
+    }
+
+    /**
+     * Lays the grid out from panelTiles: each group under its own small title, its tiles in rows (each row from the
+     * right in Hebrew), a short last row centred, so the groups read as tidy blocks.
+     */
     private void placeTiles(GridLayout tiles) {
         tiles.removeAllViews();
+        groupTiles();
         int columns = tiles.getColumnCount();
         boolean hebrew = HebrewFont.hebrew(this);
-        for (int i = 0; i < panelTiles.size(); i++) {
-            View tile = panelTiles.get(i);
-            int column = i % columns;
-            if (hebrew) column = columns - 1 - column;
-            GridLayout.LayoutParams lp = new GridLayout.LayoutParams(
-                    GridLayout.spec(i / columns), GridLayout.spec(column, 1f));
-            lp.width = 0;
-            lp.setMargins(dp(2), dp(4), dp(2), dp(4));
-            tiles.addView(tile, lp);
-            tile.setNextFocusUpId(i < columns ? R.id.qsGear : View.NO_ID);
+        int row = 0;
+        boolean firstRow = true;
+        for (int s = 0; s < SECTION_TITLES.length; s++) {
+            List<View> group = new ArrayList<>();
+            for (View tile : panelTiles) if (section(key(tile)) == s) group.add(tile);
+            if (group.isEmpty()) continue;
+            TextView header = new TextView(this);
+            header.setText(SECTION_TITLES[s]);
+            header.setTextColor(getColor(R.color.vision_text));
+            header.setAlpha(0.6f);
+            header.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 11);
+            header.setTypeface(UiFont.get(this, R.string.font_medium));
+            header.setLetterSpacing(0.04f);
+            header.setGravity(hebrew ? Gravity.RIGHT : Gravity.LEFT);
+            header.setFocusable(false);
+            header.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
+            GridLayout.LayoutParams hlp = new GridLayout.LayoutParams(GridLayout.spec(row), GridLayout.spec(0, columns, 1f));
+            hlp.width = 0;
+            hlp.setMargins(dp(10), dp(row == 0 ? 2 : 8), dp(10), dp(0));
+            tiles.addView(header, hlp);
+            row++;
+            for (int i = 0; i < group.size(); i++) {
+                View tile = group.get(i);
+                int inRow = Math.min(columns, group.size() - (i / columns) * columns);
+                int column = (i % columns) + (columns - inRow) / 2;   // a short row sits in the middle
+                if (hebrew) column = columns - 1 - column;
+                GridLayout.LayoutParams lp = new GridLayout.LayoutParams(
+                        GridLayout.spec(row + i / columns), GridLayout.spec(column, 1f));
+                lp.width = 0;
+                lp.setMargins(dp(1), dp(2), dp(1), dp(2));
+                tiles.addView(tile, lp);
+                tile.setNextFocusUpId(firstRow && i < columns ? R.id.qsGear : View.NO_ID);
+            }
+            row += (group.size() + columns - 1) / columns;
+            firstRow = false;
         }
     }
 
@@ -550,7 +627,11 @@ public final class QuickSettingsActivity extends Activity {
         if (held == null) return false;   // nothing lifted: the arrows move the focus as usual
         boolean hebrew = HebrewFont.hebrew(this);
         int columns = ((GridLayout) findViewById(R.id.tiles)).getColumnCount();
-        int at = panelTiles.indexOf(held), to;
+        // A tile moves inside its own group (the groups stay in place).
+        int group = section(key(held));
+        List<View> members = new ArrayList<>();
+        for (View t : panelTiles) if (section(key(t)) == group) members.add(t);
+        int at = members.indexOf(held), to;
         switch (keyCode) {
             case KeyEvent.KEYCODE_DPAD_LEFT: to = at + (hebrew ? 1 : -1); break;
             case KeyEvent.KEYCODE_DPAD_RIGHT: to = at + (hebrew ? -1 : 1); break;
@@ -558,10 +639,15 @@ public final class QuickSettingsActivity extends Activity {
             case KeyEvent.KEYCODE_DPAD_DOWN: to = at + columns; break;
             default: return false;
         }
-        if (event.getAction() != KeyEvent.ACTION_DOWN || to < 0 || to >= panelTiles.size()) return true;
+        if (event.getAction() != KeyEvent.ACTION_DOWN || to < 0 || to >= members.size()) return true;
         View moving = held;
-        panelTiles.remove(at);
-        panelTiles.add(to, moving);
+        members.remove(at);
+        members.add(to, moving);
+        List<View> rest = new ArrayList<>();
+        for (View t : panelTiles) if (section(key(t)) != group) rest.add(t);
+        panelTiles.clear();
+        panelTiles.addAll(members);
+        panelTiles.addAll(rest);   // placeTiles puts the groups back in their order
         placeTiles(findViewById(R.id.tiles));
         moving.requestFocus();
         lift(moving);

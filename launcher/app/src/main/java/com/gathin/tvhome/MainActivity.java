@@ -1117,6 +1117,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     @Override
     protected void onResume() {
         super.onResume();
+        // Back on Home: a visit to the stock home (the panel's Google TV tile) is over; it is redirected again.
+        HomeKeyService.endStockHomeVisit();
         // Edit from the phone (PhoneEditor): running whenever Home is, so a paired phone can change things any time;
         // a change made while Home is on screen rebuilds it at once.
         PhoneEditor.start(this);

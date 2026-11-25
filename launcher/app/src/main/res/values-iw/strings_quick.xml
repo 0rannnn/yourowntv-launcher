@@ -58,4 +58,8 @@
     <string name="app_new_version">גרסה חדשה!</string>
     <!-- On our setup app's tile: the pack's version number. -->
     <string name="app_version_tag">גרסה %1$s</string>
+    <string name="qs_google_tv">Google TV</string>
+    <string name="qs_section_connect">חיבורים</string>
+    <string name="qs_section_home">מסך הבית</string>
+    <string name="qs_section_tools">כלים</string>
 </resources>

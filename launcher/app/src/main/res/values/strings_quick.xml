@@ -62,4 +62,10 @@
     <string name="app_new_version">גרסה חדשה!</string>
     <!-- On our setup app's tile: the pack's version number. -->
     <string name="app_version_tag">גרסה %1$s</string>
+    <!-- Quick panel (vision): the TV's own Google TV home, opened on purpose. -->
+    <string name="qs_google_tv">Google TV</string>
+    <!-- Quick panel (vision): the three groups of tiles. -->
+    <string name="qs_section_connect">Connections</string>
+    <string name="qs_section_home">Home screen</string>
+    <string name="qs_section_tools">Tools</string>
 </resources>

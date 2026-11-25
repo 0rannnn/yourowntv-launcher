@@ -161,6 +161,7 @@ public class HomeKeyService extends AccessibilityService {
             @Override
             public void onReceive(Context context, Intent intent) {
                 if (!Intent.ACTION_SCREEN_OFF.equals(intent.getAction())) return;
+                googleTvVisit = false;
                 leaveForStandby();
             }
         };
@@ -294,8 +295,22 @@ public class HomeKeyService extends AccessibilityService {
             return true;
         }
         if (event.getKeyCode() == KeyEvent.KEYCODE_HOME && !stockHome.isEmpty()) {
-            redirectHomeKey(event);
-            return false;
+            // The stock home (Google TV) stays Android's Home here and cannot be switched off (on the balcony Xiaomi
+            // that left only Google's recovery screen: black). So the Home key never reaches it: a short press opens
+            // this launcher at once, a long press the quick panel (in place of Google TV's own). Oran, 2026-11-25:
+            // "the Google TV home menu isn't accessible or presented at all" (only on purpose, the panel's tile).
+            googleTvVisit = false;
+            if (event.getAction() == KeyEvent.ACTION_UP && !event.isCanceled()) {
+                if (isShortPress(event.getDownTime(), event.getEventTime(), ViewConfiguration.getLongPressTimeout())) {
+                    openHome();
+                } else {
+                    try {
+                        startActivity(new Intent(this, QuickSettingsActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                    } catch (ActivityNotFoundException | SecurityException ignored) {
+                    }
+                }
+            }
+            return true;
         }
         if (event.getKeyCode() != KeyEvent.KEYCODE_ALL_APPS) return false;
         if (event.getAction() == KeyEvent.ACTION_UP && !event.isCanceled()) openHome();
@@ -330,7 +345,51 @@ public class HomeKeyService extends AccessibilityService {
         }
         // stock_home_redirect: the firmware turned the stock launcher back on and its home screen came up.
         CharSequence cls = event.getClassName();
-        if (!stockHome.isEmpty() && cls != null && stockHome.contains(cls.toString())) openHome();
+        // A visit (the panel's Google TV tile) ends once another app's screen comes up: on TVs whose Home key never
+        // reaches this service (the balcony Xiaomi), coming back to the stock home after that is redirected again.
+        if (googleTvVisit && cls != null && event.getPackageName() != null
+                && !event.getPackageName().toString().equals(stockHomePackage)) {
+            try {
+                getPackageManager().getActivityInfo(
+                        new ComponentName(event.getPackageName().toString(), cls.toString()), 0);
+                googleTvVisit = false;
+            } catch (PackageManager.NameNotFoundException notAnActivity) {
+                // a dialog, panel or overlay over the stock home: still visiting
+            }
+        }
+        if (!googleTvVisit &&!stockHome.isEmpty() && cls != null && stockHome.contains(cls.toString())) openHome();
+    }
+
+    /** The quick panel's Google TV tile opened the stock home on purpose: left alone until Home is pressed again. */
+    private static volatile boolean googleTvVisit;
+
+    /** The stock home (Google TV) if this TV keeps one, else null: the quick panel offers it as a tile. */
+    static ComponentName stockHomeComponent(Context context) {
+        HomeKeyService service = running;
+        if (service == null || service.stockHome.isEmpty() || service.stockHomePackage.isEmpty()) return null;
+        Intent main = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).setPackage(service.stockHomePackage);
+        ResolveInfo info = context.getPackageManager().resolveActivity(main, 0);
+        return info == null ? null : new ComponentName(info.activityInfo.packageName, info.activityInfo.name);
+    }
+
+    /** Opens the stock home on purpose (the panel's tile); the redirect stands aside until the next Home press. */
+    static boolean visitStockHome(Context context) {
+        ComponentName home = stockHomeComponent(context);
+        if (home == null) return false;
+        googleTvVisit = true;
+        try {
+            context.startActivity(new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).setComponent(home)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            return true;
+        } catch (ActivityNotFoundException | SecurityException e) {
+            googleTvVisit = false;
+            return false;
+        }
+    }
+
+    /** Home is back in front: any visit to the stock home is over. */
+    static void endStockHomeVisit() {
+        googleTvVisit = false;
     }
 
     /** How long power_on_home stays armed after the screen turns on without a reboot. */
