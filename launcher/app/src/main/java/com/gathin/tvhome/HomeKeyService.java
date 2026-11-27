@@ -147,6 +147,7 @@ public class HomeKeyService extends AccessibilityService {
             }
             standbyExit = null;
         }
+        disarmWakeCover();
         if (gamepads != null) gamepads.stop();
         if (consumeVolumeKeys) VolumeKeys.stop();
         VolumeMeter.detach(this);
@@ -177,6 +178,41 @@ public class HomeKeyService extends AccessibilityService {
         } catch (RuntimeException ignored) {
         }
         standbyExit = null;
+    }
+
+    /** WakeCover: with a stock home that comes up at every wake, the waking screen stays black until ours is in front. */
+    private BroadcastReceiver wakeReceiver;
+
+    private void armWakeCover() {
+        if (stockHome.isEmpty()) {
+            disarmWakeCover();
+            return;
+        }
+        if (wakeReceiver != null) return;
+        wakeReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                if (Intent.ACTION_SCREEN_OFF.equals(intent.getAction())) {
+                    googleTvVisit = false;
+                    WakeCover.show(HomeKeyService.this);
+                } else {
+                    WakeCover.screenOn();
+                }
+            }
+        };
+        IntentFilter filter = new IntentFilter(Intent.ACTION_SCREEN_OFF);
+        filter.addAction(Intent.ACTION_SCREEN_ON);
+        registerReceiver(wakeReceiver, filter);
+    }
+
+    private void disarmWakeCover() {
+        WakeCover.hide();
+        if (wakeReceiver == null) return;
+        try {
+            unregisterReceiver(wakeReceiver);
+        } catch (RuntimeException ignored) {
+        }
+        wakeReceiver = null;
     }
 
     private void leaveForStandby() {
@@ -235,6 +271,7 @@ public class HomeKeyService extends AccessibilityService {
             setServiceInfo(info);
         }
         if (!stockHome.isEmpty() || !powerOnLiveTv.isEmpty()) probeAtBoot();
+        armWakeCover();
         armStandbyExit();
         holdAppKeys = RemoteKeys.parseHoldAppKeys(config.appKeys);
         holdAppScancodes = RemoteKeys.parseHoldAppScancodes(config.appKeys);
@@ -345,6 +382,19 @@ public class HomeKeyService extends AccessibilityService {
         }
         // stock_home_redirect: the firmware turned the stock launcher back on and its home screen came up.
         CharSequence cls = event.getClassName();
+        if (WakeCover.up() && cls != null && event.getPackageName() != null) {
+            String pkg = event.getPackageName().toString();
+            if (stockHome.contains(cls.toString())) {
+                WakeCover.windowShown(true);
+            } else if (!pkg.equals(stockHomePackage)) {
+                try {
+                    getPackageManager().getActivityInfo(new ComponentName(pkg, cls.toString()), 0);
+                    WakeCover.windowShown(false);
+                } catch (PackageManager.NameNotFoundException notAnActivity) {
+                    // a toast, the volume bar or a panel: not what the TV woke to
+                }
+            }
+        }
         // A visit (the panel's Google TV tile) ends once another app's screen comes up: on TVs whose Home key never
         // reaches this service (the balcony Xiaomi), coming back to the stock home after that is redirected again.
         if (googleTvVisit && cls != null && event.getPackageName() != null
